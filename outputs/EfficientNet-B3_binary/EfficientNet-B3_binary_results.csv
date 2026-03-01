@@ -1,0 +1,2 @@
+Model,Task,Num_Classes,Accuracy,Precision,Recall,F1,AUC,Total_Params,FLOPs_MACs,Best_Epoch,Total_Epochs_Run,Total_Training_Time_s,Inference_Time_ms,GPU_Memory_Peak_GB,Batch_Size,LR,Weight_Decay,Seed
+EfficientNet-B3,binary,2,0.9313,0.9255,0.9788,0.9514,0.9731,10699306,1.01 GMac,30,35,665.5,9.55,2.96,32,0.0001,0.0001,42
