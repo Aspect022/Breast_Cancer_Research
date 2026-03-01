@@ -22,6 +22,12 @@ seaborn
 # Model Profiling (FLOPs / MACs)
 ptflops
 
+# Quantum Computing (for Quantum-Classical Hybrid)
+pennylane
+
+# Spiking Neural Networks (optional, for enhanced LIF neurons)
+# snntorch
+
 # Jupyter (optional, for notebooks)
 jupyterlab
 ipykernel
