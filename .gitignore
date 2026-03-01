@@ -70,7 +70,7 @@ venv.bak/
 # Data and models
 /data/
 /datasets/
-models/
+/models/
 *.h5
 *.hdf5
 *.pt
@@ -81,3 +81,4 @@ models/
 .vscode/
 *.swp
 *.swo
+!src/models/
