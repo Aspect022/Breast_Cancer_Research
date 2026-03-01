@@ -68,8 +68,8 @@ env.bak/
 venv.bak/
 
 # Data and models
-data/
-datasets/
+/data/
+/datasets/
 models/
 *.h5
 *.hdf5
