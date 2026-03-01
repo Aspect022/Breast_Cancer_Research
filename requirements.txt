@@ -11,6 +11,7 @@ numpy
 pandas
 Pillow
 tqdm
+pyyaml
 
 # Scientific Computing & ML Metrics
 scikit-learn

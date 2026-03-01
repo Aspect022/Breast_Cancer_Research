@@ -5,7 +5,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from PIL import Image
-from sklearn.model_selection import GroupShuffleSplit
+from sklearn.model_selection import GroupShuffleSplit, GroupKFold
 import pandas as pd
 
 def set_seed(seed=42):
@@ -199,3 +199,94 @@ def get_dataloaders(data_dir, task="binary", batch_size=32, subset_size=None, nu
     test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
     
     return train_loader, val_loader, test_loader, len(df['label'].unique())
+
+
+def get_kfold_splits(data_dir, task="binary", n_folds=5, batch_size=32,
+                     subset_size=None, num_workers=4, seed=42):
+    """
+    Generator that yields (fold_idx, train_loader, val_loader) for K-Fold CV.
+
+    Uses GroupKFold to ensure patient-level separation between train/val.
+    A held-out test set (15% of data) is reserved BEFORE folding.
+
+    Args:
+        data_dir: Path to BreakHis root directory.
+        task: "binary" or "multi".
+        n_folds: Number of CV folds (default: 5).
+        batch_size: Batch size for DataLoaders.
+        subset_size: Optional int to limit dataset size for quick tests.
+        num_workers: DataLoader workers.
+        seed: Random seed.
+
+    Yields:
+        (fold_idx, train_loader, val_loader, test_loader, num_classes)
+        test_loader is the same across all folds (held-out).
+    """
+    set_seed(seed)
+    df = parse_breakhis_directory(data_dir, task)
+
+    if len(df) == 0:
+        raise ValueError(f"No images found in {data_dir} for task {task}.")
+
+    if subset_size:
+        df = df.sample(n=min(subset_size, len(df)), random_state=seed).reset_index(drop=True)
+        print(f"Using random subset of size: {len(df)}")
+
+    num_classes = len(df['label'].unique())
+    print(f"Total images: {len(df)} | Task: {task} | Classes: {num_classes}")
+    print(df['label'].value_counts())
+
+    # ── Hold out 15% as a fixed test set (patient-grouped) ──
+    gss = GroupShuffleSplit(n_splits=1, test_size=0.15, random_state=seed)
+    trainval_idx, test_idx = next(gss.split(df, df['label'], groups=df['patient_id']))
+
+    df_trainval = df.iloc[trainval_idx].reset_index(drop=True)
+    df_test = df.iloc[test_idx].reset_index(drop=True)
+
+    # Verify no patient leakage in test set
+    tv_patients = set(df_trainval['patient_id'])
+    test_patients = set(df_test['patient_id'])
+    assert len(tv_patients & test_patients) == 0, "Leakage: TrainVal and Test share patients!"
+
+    print(f"Held-out test set: {len(df_test)} images ({len(test_patients)} patients)")
+    print(f"Train+Val pool: {len(df_trainval)} images — splitting into {n_folds} folds\n")
+
+    # ── Build fixed test loader ──
+    _, val_tf = get_transforms()
+    test_ds = BreakHisDataset(df_test['path'], df_test['label'], transform=val_tf)
+    test_loader = DataLoader(
+        test_ds, batch_size=batch_size, shuffle=False,
+        num_workers=num_workers, pin_memory=True
+    )
+
+    # ── K-Fold on train+val pool ──
+    gkf = GroupKFold(n_splits=n_folds)
+    train_tf, val_tf = get_transforms()
+
+    for fold_idx, (train_idx, val_idx) in enumerate(
+        gkf.split(df_trainval, df_trainval['label'], groups=df_trainval['patient_id'])
+    ):
+        df_train = df_trainval.iloc[train_idx].reset_index(drop=True)
+        df_val = df_trainval.iloc[val_idx].reset_index(drop=True)
+
+        # Verify no patient leakage within fold
+        fold_train_p = set(df_train['patient_id'])
+        fold_val_p = set(df_val['patient_id'])
+        assert len(fold_train_p & fold_val_p) == 0, f"Leakage in fold {fold_idx}!"
+
+        print(f"Fold {fold_idx + 1}/{n_folds} — Train: {len(df_train)} | Val: {len(df_val)}")
+
+        train_ds = BreakHisDataset(df_train['path'], df_train['label'], transform=train_tf)
+        val_ds = BreakHisDataset(df_val['path'], df_val['label'], transform=val_tf)
+
+        train_loader = DataLoader(
+            train_ds, batch_size=batch_size, shuffle=True,
+            num_workers=num_workers, pin_memory=True
+        )
+        val_loader = DataLoader(
+            val_ds, batch_size=batch_size, shuffle=False,
+            num_workers=num_workers, pin_memory=True
+        )
+
+        yield fold_idx, train_loader, val_loader, test_loader, num_classes
+

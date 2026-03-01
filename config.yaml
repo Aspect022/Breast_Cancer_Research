@@ -1,0 +1,91 @@
+# ══════════════════════════════════════════════════════════════════
+# Breast Cancer Histopathology — Experiment Configuration
+# ══════════════════════════════════════════════════════════════════
+# Edit this file to control ALL training runs via run_pipeline.py
+# ══════════════════════════════════════════════════════════════════
+
+# ── Dataset ──────────────────────────────────────────────────────
+data:
+  data_dir: "data/BreaKHis_v1" # Path to BreakHis root directory
+  task: "binary" # "binary" (Benign/Malignant) or "multi" (IDC/ILC/Fibroadenoma)
+  subset: null # Set to an integer (e.g. 200) for quick sanity checks, null for full dataset
+  num_workers: 4 # DataLoader workers
+  seed: 42 # Random seed for reproducibility
+
+# ── Cross-Validation ────────────────────────────────────────────
+cv:
+  n_folds: 5 # Number of folds for GroupKFold (patient-grouped)
+
+# ── Training (shared defaults, overridden per-model below) ──────
+training:
+  epochs: 30 # Maximum epochs
+  patience: 7 # Early stopping patience (monitors val AUC)
+  grad_clip: 1.0 # Gradient clipping max norm (0 = disabled)
+
+# ── Models to Run ───────────────────────────────────────────────
+# Set "enabled: true/false" to include/exclude a model from the pipeline run.
+
+models:
+  # 1. EfficientNet-B3 Baseline
+  efficientnet:
+    enabled: true
+    batch_size: 32
+    lr: 1.0e-4
+    weight_decay: 1.0e-4
+    use_amp: true # Mixed precision training
+
+  # 2. Spiking CNN (LIF-SNN)
+  spiking:
+    enabled: true
+    batch_size: 16 # Smaller due to SNN time-step loop
+    lr: 8.0e-4
+    weight_decay: 1.0e-4
+    use_amp: false # Not compatible with surrogate gradients
+    num_steps: 10 # SNN time steps (10-20)
+    beta: 0.9 # LIF membrane decay
+    threshold: 1.0 # LIF spike threshold
+    dropout: 0.5
+
+  # 3. Hybrid CNN+ViT (EfficientNet-B3 backbone + Transformer head)
+  hybrid_vit:
+    enabled: true
+    batch_size: 32
+    lr: 1.0e-4
+    weight_decay: 1.0e-4
+    use_amp: true
+    d_model: 256 # Transformer embedding dim
+    num_heads: 4 # Attention heads
+    num_layers: 2 # Transformer encoder layers
+    dropout: 0.1
+    warmup_epochs: 5 # LR warmup
+    freeze_backbone: false
+
+  # 4. Pure ViT-Tiny
+  vit_tiny:
+    enabled: true
+    batch_size: 32
+    lr: 1.0e-4
+    weight_decay: 1.0e-4
+    use_amp: true
+    dropout: 0.1
+    warmup_epochs: 5
+
+  # 5. Quantum-Classical Hybrid (EfficientNet-B3 + PQC)
+  quantum:
+    enabled: true
+    batch_size: 8 # Very small — quantum sim is slow
+    lr: 1.0e-4
+    weight_decay: 1.0e-4
+    use_amp: false # PennyLane requires float32
+    n_qubits: 8 # Qubits for PQC
+    n_layers: 2 # PQC variational layers
+    dropout: 0.3
+    freeze_backbone: false
+    use_pennylane: true # false = classical simulation fallback
+
+# ── Output ──────────────────────────────────────────────────────
+output:
+  output_dir: "outputs" # Root output directory
+  save_best_model: true
+  save_plots: true # Training curves, ROC, confusion matrix
+  save_csv: true # Per-fold and summary CSVs
