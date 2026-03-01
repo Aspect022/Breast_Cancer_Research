@@ -1,0 +1,20 @@
+# Deep Learning and Data Processing
+torch
+torchvision
+numpy
+pandas
+matplotlib
+scikit-learn
+Pillow
+tqdm
+
+# Jupyter Notebook
+jupyterlab
+ipykernel
+
+# Quantum Machine Learning (PennyLane usually preferred)
+pennylane
+qiskit
+
+# Spiking Neural Networks
+snnTorch
