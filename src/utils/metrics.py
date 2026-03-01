@@ -35,22 +35,22 @@ def compute_metrics(y_true, y_probs, num_classes, class_names=None):
     y_pred = np.argmax(y_probs, axis=1)
     
     avg = 'binary' if num_classes == 2 else 'macro'
-    pos_label = 1 if num_classes == 2 else None
     
     acc = accuracy_score(y_true, y_pred)
     precision = precision_score(y_true, y_pred, average=avg, zero_division=0)
     recall = recall_score(y_true, y_pred, average=avg, zero_division=0)
     f1 = f1_score(y_true, y_pred, average=avg, zero_division=0)
     
-    # AUC calculation
-    if num_classes == 2:
-        # For binary: use probability of the positive class
-        auc_score = roc_auc_score(y_true, y_probs[:, 1])
-    else:
-        # For multi-class: One-vs-Rest macro AUC
-        auc_score = roc_auc_score(
-            y_true, y_probs, multi_class='ovr', average='macro'
-        )
+    # AUC calculation with edge case handling for tiny single-class subsets
+    try:
+        if num_classes == 2:
+            auc_score = roc_auc_score(y_true, y_probs[:, 1])
+        else:
+            auc_score = roc_auc_score(
+                y_true, y_probs, multi_class='ovr', average='macro'
+            )
+    except ValueError:
+        auc_score = 0.0
     
     cm = confusion_matrix(y_true, y_pred)
     report = classification_report(

@@ -80,11 +80,13 @@ def train_one_epoch(model, loader, criterion, optimizer, scaler, device):
     
     for images, labels in loader:
         images = images.to(device, non_blocking=True)
-        labels = labels.to(device, non_blocking=True)
+        # Ensure labels are explicitly long tensor for CrossEntropyLoss
+        labels = labels.to(device, dtype=torch.long, non_blocking=True)
         
         optimizer.zero_grad()
         
-        with autocast(device_type='cuda'):
+        # `torch.cuda.amp.autocast` DOES NOT accept device_type argument!
+        with autocast():
             outputs = model(images)
             loss = criterion(outputs, labels)
         
@@ -116,9 +118,9 @@ def evaluate(model, loader, criterion, device, num_classes):
     
     for images, labels in loader:
         images = images.to(device, non_blocking=True)
-        labels = labels.to(device, non_blocking=True)
+        labels = labels.to(device, dtype=torch.long, non_blocking=True)
         
-        with autocast(device_type='cuda'):
+        with autocast():
             outputs = model(images)
             loss = criterion(outputs, labels)
         

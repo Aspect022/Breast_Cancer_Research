@@ -46,7 +46,7 @@ class BreakHisDataset(Dataset):
         if self.transform:
             image = self.transform(image)
             
-        return image, label
+        return image, int(label)
 
 def get_transforms():
     """Returns train and validation/test transforms."""
@@ -155,9 +155,10 @@ def get_dataloaders(data_dir, task="binary", batch_size=32, subset_size=None, nu
     
     if subset_size:
         # Take a subset but try to keep it patient-grouped if possible
-        # For simplicity in subset mode, we just take the first N
-        df = df.head(subset_size)
-        print(f"Using subset of size: {len(df)}")
+        # We sample randomly so we get a mix of classes, which is crucial for
+        # ROC AUC scoring not to crash due to single-class batches.
+        df = df.sample(n=min(subset_size, len(df)), random_state=42).reset_index(drop=True)
+        print(f"Using random subset of size: {len(df)}")
         
     print(f"Total images found: {len(df)} | Task: {task}")
     print(df['label'].value_counts())
