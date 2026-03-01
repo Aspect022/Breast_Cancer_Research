@@ -1,0 +1,46 @@
+# Walkthrough: EfficientNet-B3 Baseline Implementation
+
+## What Was Built
+
+A complete, research-grade EfficientNet-B3 baseline pipeline for breast cancer histopathology classification on the **BreakHis dataset**, supporting both **binary** (Benign vs Malignant) and **3-class** (IDC, ILC, Fibroadenoma) tasks.
+
+## Files Created
+
+| File | Purpose |
+|---|---|
+| [dataset.py](file:///d:/Projects/AI-Projects/Brest_cancer/src/data/dataset.py) | BreakHis loader with **patient-level GroupShuffleSplit** (70/15/15) — prevents data leakage |
+| [efficientnet.py](file:///d:/Projects/AI-Projects/Brest_cancer/src/models/efficientnet.py) | Pretrained EfficientNet-B3 with replaced classifier head |
+| [metrics.py](file:///d:/Projects/AI-Projects/Brest_cancer/src/utils/metrics.py) | Accuracy, F1, AUC (macro OVR), confusion matrix, ROC plots, FLOPs, inference time, CSV export |
+| [train.py](file:///d:/Projects/AI-Projects/Brest_cancer/src/train.py) | Full training loop: mixed precision, AdamW, CosineAnnealingLR, AUC-based early stopping |
+| [requirements.txt](file:///d:/Projects/AI-Projects/Brest_cancer/requirements.txt) | All dependencies including `ptflops`, `seaborn`, `scikit-learn` |
+| [README.md](file:///d:/Projects/AI-Projects/Brest_cancer/README.md) | Usage guide with design decisions table |
+
+## Key Design Choices (per mentor feedback)
+
+- **Patient-level split** via `GroupShuffleSplit` — no patient overlaps between train/val/test
+- **CrossEntropyLoss** for both tasks (binary mapped as 2-class)
+- **Early stopping monitors Validation AUC**, not loss
+- **CSV logs** include: Best Epoch, Total Training Time, GPU Memory, Inference Time
+- **Seeds fixed** (`torch`, `numpy`, `random` = 42) + `cudnn.benchmark = True`
+
+## How To Run
+
+```bash
+# 1. Install
+pip install -r requirements.txt
+
+# 2. Sanity check (do this first!)
+python src/train.py --task binary --data_dir <PATH> --subset 200 --epochs 3
+
+# 3. Full binary run
+python src/train.py --task binary --data_dir <PATH>
+
+# 4. Full 3-class run
+python src/train.py --task multi --data_dir <PATH>
+```
+
+## Outputs (saved under `outputs/`)
+
+- `best_model.pth`, training curves (PNG), confusion matrix (PNG), ROC curve (PNG)
+- `*_results.csv` — one-row summary table ready for your presentation slide
+- `*_epoch_log.csv` — per-epoch training history

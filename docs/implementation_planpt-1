@@ -1,0 +1,59 @@
+# Goal Description
+
+Establish a research-grade baseline model for breast cancer histopathology classification using EfficientNet-B3 on the BreakHis dataset. This covers both a binary classification task (Benign vs Malignant) and a 3-class targeted task (IDC, ILC, Fibroadenoma). The implementation will use PyTorch, mixed precision training, robust augmentations, metrics tracking, and visualizations suitable for research presentations.
+
+## User Review Required
+
+> [!NOTE]
+> Thank you for the excellent feedback! I have updated the plan to explicitly use **Patient ID grouped stratification** instead of simple stratification to absolutely prevent data leakage. I have also switched the binary task to use 2-class CrossEntropyLoss for consistency, explicitly mapped out Macro-OVR AUC calculations, and updated the Early Stopping logic to monitor Validation AUC. 
+> 
+> *As requested, I will provide the scripts for you to execute locally rather than running them natively in this session.* I will also add a `--subset` flag to your training script for quick sanity checks!
+
+## Proposed Changes
+
+### Configuration
+#### [NEW] [requirements.txt](file:///d:/Projects/AI-Projects/Brest_cancer/requirements.txt)
+Update to include extra tracking and plotting tools: `ptflops`, `seaborn`, `scikit-learn`, `matplotlib`.
+
+---
+### Data Component
+#### [NEW] `src/data/dataset.py`
+A PyTorch dataset specifically for BreakHis. 
+- Loads image paths and metadata (parsing Patient IDs from the path/filename).
+- Automatically handles **Grouped Stratified Splitting** (70% train, 15% validation, 15% test) grouped by **Patient ID** to absolutely prevent data leakage between splits.
+- Integrates Torchvision transforms (Resize 224x224, Random H/V Flip, Rotation $\pm$20, Color Jitter, ImageNet normalization).
+
+---
+### Model Architecture
+#### [NEW] `src/models/efficientnet.py`
+Creates the baseline EfficientNet-B3 architecture.
+- Uses standard ImageNet weights (`IMAGENET1K_V1`).
+- Replaces the head with `Dropout(0.4)` and a `Linear` layer configured for the given `num_classes`.
+
+---
+### Utilities
+#### [NEW] `src/utils/metrics.py`
+Handles all metric calculations and plotting.
+- Evaluates Accuracy, Precision, Recall, F1, **AUC (Macro One-vs-Rest for 3-class)**, Confusion Matrix, Classification Report.
+- Logs all results to a CSV, including tracking **best epoch**, **total training time**, and **GPU memory usage**.
+- Graphs and saves train/val loss and accuracy plots, confusion matrix heatmaps, and ROC curves as `.png` images.
+- Implements `ptflops` routine for MAC/FLOP reporting and counts parameters and inference time per image.
+
+---
+### Training Loop
+#### [NEW] `src/train.py`
+Main execution script for both binary and 3-class tasks.
+- Enforces strict **Reproducibility** steps: setting deterministic seeds (`torch.manual_seed(42)`, `np.random.seed(42)`, `random.seed(42)`) and setting `torch.backends.cudnn.benchmark = True` for optimized GPU performance.
+- Initializes model, dataloaders, mixed precision (`cuda.amp`), `AdamW` (lr=1e-4, wd=1e-4), and `CosineAnnealingLR`.
+- Loss function: Uses **`CrossEntropyLoss`** universally, meaning binary classification is mapped as a 2-class problem.
+- Sets Early Stopping (patience=5) to monitor **Validation AUC**.
+- Captures metrics on the test set and triggers the utils to save the plots.
+- Includes a `--subset` flag to test with a tiny shard of data (e.g., 200 images) before kicking off a full overnight run.
+
+## Verification Plan
+### Automated Tests
+* None explicitly required, though the data loader will log dataset split statistics to verify stratified 70/15/15 sampling.
+* Run the script on a tiny subset initially (e.g., 20 samples) to ensure the training loop, loss computation, and metric generation logic execute flawlessly before launching the full 30-epoch training.
+
+### Execution
+* Run `python src/train.py --task binary --data_dir <PATH>` followed by `python src/train.py --task multi --data_dir <PATH>`. Verify outputs conform to expectations.

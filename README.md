@@ -1,34 +1,103 @@
-# Breast Cancer Histopathological Data Analysis
+# Breast Cancer Histopathological Classification — EfficientNet-B3 Baseline
 
-This repository contains research and implementation code for classifying breast cancer using histopathological image data. The focus of the project is to explore and compare **Quantum Machine Learning (QML)** algorithms against **Spiking Neural Networks (SNNs)** to determine the most effective alternative.
+Research-grade baseline for classifying breast cancer histopathology images (BreakHis dataset) using an EfficientNet-B3 pretrained on ImageNet, with mixed-precision training, patient-level data splitting, and comprehensive metrics logging.
 
 ## Project Structure
 
-```
+```text
 .
-├── data/               # Raw and processed datasets (ignored in git)
-├── docs/               # Documentation files
-├── notebooks/          # Jupyter notebooks for exploration and prototyping
-├── src/                # Source code
-│   ├── data/           # Scripts to download or process data
-│   ├── models/         # Model architectures
-│   │   ├── quantum/    # Quantum approaches
-│   │   └── spiking/    # Spiking Neural Network approaches
-│   └── utils/          # Utility scripts and helpers
-├── requirements.txt    # Python dependencies
-└── README.md           # Project overview
+├── data/                  # (gitignored) Raw / processed BreakHis dataset
+├── outputs/               # (gitignored) Saved models, plots, CSVs
+├── notebooks/             # Jupyter notebooks for exploration
+├── docs/                  # Documentation
+├── src/
+│   ├── data/
+│   │   └── dataset.py     # BreakHis loader + patient-grouped stratified split
+│   ├── models/
+│   │   ├── efficientnet.py # EfficientNet-B3 transfer learning model
+│   │   ├── quantum/        # (future) Quantum ML approaches
+│   │   └── spiking/        # (future) Spiking Neural Network approaches
+│   ├── utils/
+│   │   └── metrics.py      # Metrics computation, plotting, profiling, CSV logging
+│   └── train.py            # Main training script (mixed precision + early stopping)
+├── requirements.txt
+└── README.md
 ```
 
-## Getting Started
+## Quick Start / Setup for Collaborators
 
-1. Clone this repository.
-2. Initialize your virtual environment and install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Prepare the data according to the instructions in `src/data/README.md` (to be created).
-4. Run the notebooks or scripts targeting either Quantum or Spiking models.
+We have provided automated setup scripts to get you up and running instantly.
 
-## Reference File
+### 1. Environment Initialization
+Run the setup script for your operating system:
 
-If you have a reference file located elsewhere on the system, make sure the analysis scripts can point to its absolute path.
+**Windows:**
+Double-click `setup.bat` or run:
+```cmd
+setup.bat
+```
+
+**macOS/Linux:**
+```bash
+chmod +x setup.sh
+./setup.sh
+```
+
+This will automatically create a `.venv` virtual environment and install all dependencies.
+
+### 2. Activate the Environment
+Before running any code, ensure your terminal is using the virtual environment:
+- **Windows:** `.venv\Scripts\activate`
+- **Mac/Linux:** `source .venv/bin/activate`
+
+### 3. Dataset Setup
+Download the [BreakHis dataset](https://web.inf.ufpr.br/vri/databases/breast-cancer-histopathological-database-breakhis/) and extract it into the `data/` folder in this repository. 
+Your path should look something like: `data/BreaKHis_v1/...`
+
+### 4. Sanity Check First (Recommended!)
+Test the pipeline to ensure your environment and dataset are wired up correctly:
+```bash
+python src/train.py --task binary --data_dir data/BreaKHis_v1 --subset 200 --epochs 3
+```
+
+### 5. Full Training Runs
+
+**Train — Binary (Benign vs Malignant)**
+
+```bash
+python src/train.py --task binary --data_dir data/BreaKHis_v1
+```
+
+**Train — 3-Class (IDC, ILC, Fibroadenoma)**
+
+```bash
+python src/train.py --task multi --data_dir data/BreaKHis_v1
+```
+
+## Key Design Decisions
+
+| Decision | Choice | Rationale |
+| --- | --- | --- |
+| **Data split** | GroupShuffleSplit by Patient ID | Prevents data leakage |
+| **Loss** | CrossEntropyLoss (2-class for binary) | Cleaner ROC / confusion matrix |
+| **Early Stopping** | On Validation AUC | More clinically relevant than loss |
+| **Mixed Precision** | `torch.cuda.amp` | Faster training on RTX 5050 |
+| **Optimizer** | AdamW (lr=1e-4, wd=1e-4) | Standard for fine-tuning |
+| **Scheduler** | CosineAnnealingLR | Smooth LR decay |
+
+## Outputs (saved to `outputs/`)
+
+- `best_model.pth` — Best checkpoint (by val AUC)
+- `*_training_curves.png` — Loss & accuracy per epoch
+- `*_confusion_matrix.png` — Heatmap
+- `*_roc_curve.png` — ROC curve(s)
+- `*_results.csv` — Summary table (Accuracy, F1, AUC, Params, FLOPs, Time, etc.)
+- `*_epoch_log.csv` — Per-epoch metrics log
+
+## Reproducibility
+
+All random seeds are fixed (`torch`, `numpy`, `random` — default seed 42).
+
+## GPU Requirements
+
+Tested on NVIDIA RTX 5050. Mixed precision enabled by default.

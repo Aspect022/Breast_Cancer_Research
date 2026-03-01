@@ -1,20 +1,27 @@
-# Deep Learning and Data Processing
-torch
-torchvision
+# ──────────────────────────────────────────────
+# EfficientNet-B3 Baseline — BreakHis Dataset
+# ──────────────────────────────────────────────
+
+# Core Deep Learning
+torch>=2.0
+torchvision>=0.15
+
+# Data Processing
 numpy
 pandas
-matplotlib
-scikit-learn
 Pillow
 tqdm
 
-# Jupyter Notebook
+# Scientific Computing & ML Metrics
+scikit-learn
+
+# Plotting
+matplotlib
+seaborn
+
+# Model Profiling (FLOPs / MACs)
+ptflops
+
+# Jupyter (optional, for notebooks)
 jupyterlab
 ipykernel
-
-# Quantum Machine Learning (PennyLane usually preferred)
-pennylane
-qiskit
-
-# Spiking Neural Networks
-snnTorch
