@@ -58,7 +58,7 @@ if PENNYLANE_AVAILABLE:
             self.n_layers = n_layers
 
             # PennyLane device (default.qubit supports autograd)
-            self.dev = qml.device("default.qubit", wires=n_qubits)
+            self.dev = qml.device("lightning.qubit", wires=n_qubits)
 
             # Trainable parameters: 3 rotations per qubit per layer
             self.params = nn.Parameter(
@@ -252,6 +252,7 @@ class QuantumClassicalHybrid(nn.Module):
         quantum_out = self.quantum_layer(feat)         # (B, 8)
 
         # Classification
+        quantum_out = quantum_out.float()
         logits = self.post_quantum(quantum_out)        # (B, num_classes)
         return logits
 
