@@ -41,9 +41,10 @@ models:
     weight_decay: 1.0e-4
     use_amp: true  # Mixed precision (A100 optimized)
 
-  # 2. Spiking CNN (LIF-SNN) - Legacy, clinically unusable
+  # 2. Spiking CNN (LIF-SNN) - REMOVED per project decision
+  #    Clinically unusable due to 62.8% false negative rate
   spiking:
-    enabled: false  # Disabled per project decision
+    enabled: false  # permanently disabled - SNN removed from project
     batch_size: 16
     lr: 8.0e-4
     weight_decay: 1.0e-4
@@ -307,7 +308,7 @@ output:
   save_plots: true  # Training curves, ROC, confusion matrix
   save_csv: true  # Per-fold and summary CSVs
   save_checkpoints: true  # Save best model per fold
-  wandb_enabled: false  # Enable Weights & Biases tracking (optional)
+  wandb_enabled: true  # Enable Weights & Biases tracking
   wandb_project: "breast-cancer-transformers"
 
 # ── A100 GPU Optimizations ─────────────────────────────────────

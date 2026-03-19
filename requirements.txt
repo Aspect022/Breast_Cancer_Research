@@ -100,8 +100,8 @@ flash-attn>=2.3.0
 jupyterlab>=4.0.0
 ipykernel>=6.25.0
 
-# Experiment tracking (optional)
-# wandb>=0.15.0
+# Experiment tracking (REQUIRED)
+wandb>=0.16.0
 
 # ───────────────────────────────────────────────────────────────────
 # Installation Notes for A100 Servers

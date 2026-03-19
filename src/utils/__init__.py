@@ -41,6 +41,11 @@ from .interpretability import (
     save_interpretability_results,
 )
 
+from .wandb_logger import (
+    WandBLogger,
+    get_wandb_logger,
+)
+
 __all__ = [
     # Metrics
     'compute_metrics',
@@ -77,4 +82,8 @@ __all__ = [
     'visualize_gate_distribution',
     'tensor_to_image',
     'save_interpretability_results',
+    
+    # W&B Logging
+    'WandBLogger',
+    'get_wandb_logger',
 ]
