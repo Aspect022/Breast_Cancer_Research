@@ -94,6 +94,10 @@ echo -e "${BLUE}[4/7]${NC} Installing requirements (GPU optimized)..."
 echo "This may take 5-10 minutes on first run..."
 echo
 
+# Install wheel first (required for some packages)
+echo "Installing build dependencies..."
+pip install wheel setuptools -q
+
 echo "Installing PyTorch with CUDA support..."
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 -q
 
