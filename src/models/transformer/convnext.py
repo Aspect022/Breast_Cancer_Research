@@ -90,7 +90,7 @@ class ConvNeXtWrapper(nn.Module):
                 config['model_name'],
                 pretrained=pretrained,
                 num_classes=0,  # Remove classification head
-                global_pool='',  # We'll add our own head
+                global_pool='avg',  # Use global average pooling
                 drop_path_rate=drop_path_rate,
             )
             print(f"✅ Loaded ConvNeXt-{variant.upper()}")
@@ -101,7 +101,7 @@ class ConvNeXtWrapper(nn.Module):
                 config['model_name'],
                 pretrained=False,
                 num_classes=0,
-                global_pool='',
+                global_pool='avg',
                 drop_path_rate=drop_path_rate,
             )
         

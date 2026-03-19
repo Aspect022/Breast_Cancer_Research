@@ -102,9 +102,9 @@ class SwinTransformerWrapper(nn.Module):
                 pretrained=pretrained,
                 img_size=img_size,
                 num_classes=0,  # Remove classification head
-                global_pool='',  # We'll add our own head
+                global_pool='avg',  # Use global average pooling
             )
-            print(f"✅ Loaded Swin-{variant.upper()} (img_size={img_size}, window={self.backbone.patch_embed.window})")
+            print(f"✅ Loaded Swin-{variant.upper()} (img_size={img_size})")
         except Exception as e:
             print(f"⚠️  Warning: Could not load pretrained Swin-{variant}: {e}")
             print("  Creating model without pretrained weights...")
@@ -113,7 +113,7 @@ class SwinTransformerWrapper(nn.Module):
                 pretrained=False,
                 img_size=img_size,
                 num_classes=0,
-                global_pool='',
+                global_pool='avg',
             )
         
         # Get feature dimension from backbone

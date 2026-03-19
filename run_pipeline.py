@@ -209,6 +209,15 @@ def build_model(model_name, num_classes, model_cfg):
     # QENN variants (all rotation configurations)
     elif model_name.startswith('qenn_'):
         rotation_config = model_name.replace('qenn_', '')
+        # Map short names to full config names
+        rotation_map = {
+            'ry': 'ry_only',
+            'ry_rz': 'ry_rz',
+            'u3': 'u3',
+            'rx_ry_rz': 'rx_ry_rz',
+        }
+        rotation_config = rotation_map.get(rotation_config, rotation_config)
+        
         model = get_qenn(
             num_classes=num_classes,
             n_qubits=model_cfg.get('n_qubits', 8),
