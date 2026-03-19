@@ -434,8 +434,9 @@ def train_fold(
 
         # Log to W&B
         if wandb_logger is not None:
+            # Log epoch metrics with fold offset for step
             wandb_logger.log_epoch_metrics(
-                epoch=epoch,
+                epoch=epoch + (fold_idx * epochs),  # Offset epochs per fold
                 train_loss=train_loss,
                 train_acc=train_acc,
                 val_loss=val_loss,
@@ -444,8 +445,8 @@ def train_fold(
                 lr=current_lr,
             )
             
-            # Log weights and biases periodically
-            if wandb_logger.wandb_cfg.get('log_weights', True):
+            # Log weights and biases periodically (only for first fold to avoid spam)
+            if fold_idx == 0 and wandb_logger.wandb_cfg.get('log_weights', True):
                 wandb_logger.log_weights_and_biases(
                     model=model,
                     epoch=epoch,
@@ -593,6 +594,17 @@ def run_model_pipeline(model_name, cfg, all_results, wandb_run=None):
     print(f"  {n_folds}-Fold CV | Max Epochs: {train_cfg['epochs']}")
     print(f"{'═'*70}")
 
+    # Initialize W&B logger for this model (ONE run per model, not per fold)
+    wandb_logger = None
+    if cfg.get('output', {}).get('wandb_enabled', False):
+        wandb_logger = WandBLogger(
+            config=cfg,
+            run_name=display_name,  # Use model name as run name
+        )
+        if not wandb_logger.initialized:
+            # Create ONE W&B run for all folds of this model
+            wandb_logger.init(model=None, model_name=display_name)
+
     fold_rows = []
     model_start_time = time.time()
 
@@ -610,18 +622,7 @@ def run_model_pipeline(model_name, cfg, all_results, wandb_run=None):
         model, _, _ = build_model(model_name, num_classes, model_cfg)
         model = model.to(device)
 
-        # Initialize W&B logger for this fold
-        wandb_logger = None
-        if cfg.get('output', {}).get('wandb_enabled', False):
-            wandb_logger = WandBLogger(
-                config=cfg,
-                run_name=f"{display_name}_fold{fold_idx+1}",
-            )
-            if not wandb_logger.initialized:
-                # Create a new W&B run for each model+fold
-                wandb_logger.init(model=None, model_name=display_name, fold_idx=fold_idx+1)
-
-        # Train
+        # Train (use model-level W&B logger, log fold as metric)
         fold_result = train_fold(
             model, model_cfg, train_cfg, train_loader, val_loader,
             device, model_output_dir, fold_idx, display_name,
@@ -705,6 +706,41 @@ def run_model_pipeline(model_name, cfg, all_results, wandb_run=None):
             agg[key] = fold_rows[-1][key]
 
     all_results.append(agg)
+
+    # Log 5-fold averaged results to W&B (ONE summary per model)
+    if wandb_logger is not None and wandb_logger.initialized:
+        # Log averaged metrics
+        wandb_logger.log_metrics({
+            'accuracy': agg['Mean_Acc'],
+            'accuracy_std': agg.get('Std_Acc', 0),
+            'f1_score': agg['Mean_F1'],
+            'f1_std': agg.get('Std_F1', 0),
+            'auc_roc': agg['Mean_AUC'],
+            'auc_std': agg.get('Std_AUC', 0),
+            'mcc': agg['Mean_MCC'],
+            'sensitivity': agg['Mean_Sensitivity'],
+            'specificity': agg['Mean_Specificity'],
+            'fnr': agg['Mean_FNR'],
+            'total_params': total_params,
+            'training_time_s': agg['Total_Time_s'],
+            'inference_ms': agg['Mean_Inference_ms'],
+            'folds_completed': n_folds,
+        })
+        
+        # Log confusion matrix from last fold
+        # Log model architecture
+        if wandb_logger.wandb_cfg.get('log_model', True):
+            # Save model checkpoint
+            if fold_rows:
+                last_fold_path = fold_rows[-1].get('best_path', '')
+                if os.path.exists(last_fold_path):
+                    wandb_logger.log_model_checkpoint(
+                        model=model,
+                        optimizer=None,
+                        epoch=n_folds,
+                        metrics={'accuracy': agg['Mean_Acc'], 'auc': agg['Mean_AUC']},
+                        save_dir=model_output_dir,
+                    )
 
     print(f"\n  ╔═══ {display_name} SUMMARY ({n_folds}-Fold) ═══╗")
     print(f"  ║ Accuracy:    {agg['Mean_Acc']:.4f} ± {agg['Std_Acc']:.4f}")

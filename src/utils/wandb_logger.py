@@ -97,7 +97,6 @@ class WandBLogger:
         self,
         model: Optional[nn.Module] = None,
         model_name: str = "model",
-        fold_idx: Optional[int] = None,
     ):
         """
         Initialize W&B run.
@@ -105,26 +104,19 @@ class WandBLogger:
         Args:
             model: PyTorch model to log architecture.
             model_name: Name for the model in W&B.
-            fold_idx: Fold index for naming.
         """
         if self.initialized:
             return
         
-        # Generate better run name
-        if fold_idx is not None:
-            run_name = f"{model_name}_fold{fold_idx}"
-        else:
-            run_name = self.run_name
-        
         # Prepare W&B config
         wandb_cfg = {
             'project': self.wandb_cfg.get('project', self.project),
-            'name': run_name,
+            'name': self.run_name,
             'tags': self.tags,
             'config': self.config,
             'dir': self.log_dir,
             'save_code': self.wandb_cfg.get('save_code', True),
-            'reinit': True,  # Allow reinitialization
+            'reinit': True,  # Allow reinitialization for new model
         }
         
         # Set entity if provided
