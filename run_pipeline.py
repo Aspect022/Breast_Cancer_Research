@@ -23,7 +23,7 @@ import torch.nn as nn
 from datetime import datetime
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
-from torch.cuda.amp import GradScaler, autocast
+from torch.amp import GradScaler, autocast
 from typing import Optional
 
 # Add project root to path
@@ -278,7 +278,7 @@ def train_one_epoch(model, loader, criterion, optimizer, device,
         optimizer.zero_grad()
 
         if use_amp and scaler is not None:
-            with autocast():
+            with autocast('cuda'):
                 outputs = model(images)
                 loss = criterion(outputs, labels)
             scaler.scale(loss).backward()
@@ -318,7 +318,7 @@ def evaluate(model, loader, criterion, device, use_amp=True):
         labels = labels.to(device, dtype=torch.long, non_blocking=True)
 
         if use_amp:
-            with autocast():
+            with autocast('cuda'):
                 outputs = model(images)
                 loss = criterion(outputs, labels)
         else:
@@ -384,7 +384,7 @@ def train_fold(
     criterion = nn.CrossEntropyLoss()
     optimizer = AdamW(model.parameters(), lr=lr, weight_decay=wd)
     scheduler = CosineAnnealingLR(optimizer, T_max=epochs)
-    scaler = GradScaler() if use_amp else None
+    scaler = GradScaler('cuda') if use_amp else None
 
     history = {
         'train_loss': [], 'val_loss': [],
@@ -591,13 +591,14 @@ def run_model_pipeline(model_name, cfg, all_results, wandb_run=None):
 
     # Initialize W&B logger for this model
     wandb_logger = None
-    if wandb_run is not None and cfg.get('output', {}).get('wandb_enabled', False):
+    if cfg.get('output', {}).get('wandb_enabled', False):
         wandb_logger = WandBLogger(
             config=cfg,
-            run_name=f"{display_name}_fold_cv",
+            run_name=f"{display_name}_fold{fold_idx+1}",
         )
         if not wandb_logger.initialized:
-            wandb_logger.init(model=None, model_name=display_name)
+            # Create a new W&B run for each model+fold
+            wandb_logger.init(model=None, model_name=display_name, fold_idx=fold_idx+1)
 
     fold_rows = []
     model_start_time = time.time()
@@ -795,17 +796,12 @@ def main():
     
     set_seed(cfg['data'].get('seed', 42))
 
-    # Initialize Weights & Biases
-    wandb_run = None
+    # Initialize W&B project (not run - runs created per model)
     if cfg.get('output', {}).get('wandb_enabled', False):
-        print("\n🚀 Initializing Weights & Biases...")
-        wandb_logger = get_wandb_logger(
-            config=cfg,
-            run_name=f"breast_cancer_{cfg['data']['task']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-        )
-        wandb_logger.init()
-        wandb_run = wandb_logger.current_run
-        print(f"✓ W&B Run URL: {wandb_run.get_url()}")
+        print("\n🚀 Weights & Biases enabled")
+        print(f"   Project: {cfg['output'].get('wandb_project', 'breast-cancer-transformers')}")
+        print(f"   Entity: {cfg.get('wandb', {}).get('entity', 'tgijayesh-dayananda-sagar-university')}")
+        print(f"   Model runs will be created for each fold")
 
     print("╔══════════════════════════════════════════════════════════════╗")
     print("║   BREAST CANCER HISTOPATHOLOGY — PARADIGM COMPARISON       ║")
@@ -814,8 +810,6 @@ def main():
     print(f"║  Folds:  {cfg['cv']['n_folds']:.<50d}║")
     print(f"║  Epochs: {cfg['training']['epochs']:.<50d}║")
     print(f"║  Models: {', '.join(models_to_run):.<50s}║")
-    if wandb_run:
-        print(f"║  W&B:    {wandb_run.name:.<50s}║")
     print("╚══════════════════════════════════════════════════════════════╝")
 
     pipeline_start = time.time()
@@ -823,7 +817,7 @@ def main():
 
     for model_name in models_to_run:
         try:
-            run_model_pipeline(model_name, cfg, all_results, wandb_run=wandb_run)
+            run_model_pipeline(model_name, cfg, all_results, wandb_run=None)
         except Exception as e:
             print(f"\n  ✗ ERROR running {model_name}: {e}")
             import traceback
@@ -858,10 +852,12 @@ def main():
         print("\nNo results to compare.")
 
     # Finish W&B
-    if wandb_run is not None:
-        print("\n🏁 Finishing Weights & Biases run...")
+    try:
         wandb.finish()
-        print(f"✓ W&B Dashboard: {wandb_run.get_url()}")
+        print("\n🏁 Weights & Biases run finished")
+        print(f"✓ View dashboard: https://wandb.ai/tgijayesh-dayananda-sagar-university/breast-cancer-transformers")
+    except:
+        pass
 
     print("\n✓ Pipeline complete!")
 
