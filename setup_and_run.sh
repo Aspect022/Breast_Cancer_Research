@@ -69,8 +69,8 @@ source .venv/bin/activate
 
 # Install PyTorch
 if ! python3 -c "import torch" &> /dev/null; then
-    log "Installing PyTorch with CUDA support..."
-    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 -q
+    log "Installing PyTorch with CUDA 12.1 support..."
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 -q
     log "✓ PyTorch installed"
 else
     log "✓ PyTorch already installed"

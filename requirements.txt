@@ -9,8 +9,8 @@
 # Core Deep Learning Frameworks (A100 Optimized)
 # ───────────────────────────────────────────────────────────────────
 
-# PyTorch with CUDA 11.8 support (install first!)
-# Command: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+# PyTorch with CUDA 12.1 support (compatible with CUDA 12.4)
+# Command: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 torch>=2.1.0
 torchvision>=0.16.0
 
@@ -89,8 +89,8 @@ thop>=0.1.1
 # ───────────────────────────────────────────────────────────────────
 
 # Flash Attention 2 (A100 specific - significant speedup)
-# Install: pip install flash-attn --no-build-isolation
-flash-attn>=2.3.0
+# Install manually if needed: pip install flash-attn --no-build-isolation
+# flash-attn>=2.3.0  # COMMENTED OUT - requires manual installation, CUDA version matching
 
 # ───────────────────────────────────────────────────────────────────
 # Development & Experiment Tracking

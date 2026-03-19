@@ -99,7 +99,7 @@ echo "Installing build dependencies..."
 pip install wheel setuptools -q
 
 echo "Installing PyTorch with CUDA support..."
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 -q
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 -q
 
 echo "Installing timm and other core packages..."
 pip install timm>=1.0.0 scipy>=1.11.0 opencv-python>=4.8.0 -q
