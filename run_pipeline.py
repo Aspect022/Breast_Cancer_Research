@@ -589,17 +589,6 @@ def run_model_pipeline(model_name, cfg, all_results, wandb_run=None):
     print(f"  {n_folds}-Fold CV | Max Epochs: {train_cfg['epochs']}")
     print(f"{'═'*70}")
 
-    # Initialize W&B logger for this model
-    wandb_logger = None
-    if cfg.get('output', {}).get('wandb_enabled', False):
-        wandb_logger = WandBLogger(
-            config=cfg,
-            run_name=f"{display_name}_fold{fold_idx+1}",
-        )
-        if not wandb_logger.initialized:
-            # Create a new W&B run for each model+fold
-            wandb_logger.init(model=None, model_name=display_name, fold_idx=fold_idx+1)
-
     fold_rows = []
     model_start_time = time.time()
 
@@ -616,6 +605,17 @@ def run_model_pipeline(model_name, cfg, all_results, wandb_run=None):
 
         model, _, _ = build_model(model_name, num_classes, model_cfg)
         model = model.to(device)
+
+        # Initialize W&B logger for this fold
+        wandb_logger = None
+        if cfg.get('output', {}).get('wandb_enabled', False):
+            wandb_logger = WandBLogger(
+                config=cfg,
+                run_name=f"{display_name}_fold{fold_idx+1}",
+            )
+            if not wandb_logger.initialized:
+                # Create a new W&B run for each model+fold
+                wandb_logger.init(model=None, model_name=display_name, fold_idx=fold_idx+1)
 
         # Train
         fold_result = train_fold(
