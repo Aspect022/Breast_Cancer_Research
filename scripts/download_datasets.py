@@ -125,32 +125,45 @@ def extract_archive(archive_path, extract_to=None):
 
 
 def download_breakhis():
-    """Download BreakHis dataset."""
+    """Download BreakHis dataset from Kaggle."""
     print("\n" + "="*70)
     print("BreakHis Histopathology Dataset")
     print("="*70)
     
     final_dir = DATASETS['breakhis']['final_dir']
     
-    if final_dir.exists():
+    if final_dir.exists() and list(final_dir.rglob('*.png')):
         print(f"✓ BreakHis dataset already exists at: {final_dir}")
         print("  Skipping download...")
         return True
     
-    print("\nBreakHis requires manual download from:")
-    print("  https://web.inf.ufpr.br/vri/databases/breast-cancer-histopathological-database-breakhis/")
-    print("\nSteps:")
-    print("  1. Visit the URL above")
-    print("  2. Click 'Request Dataset' or download directly if available")
-    print("  3. Extract to: data/BreaKHis_v1/")
-    print("\nAlternative: Create simulated BreakHis structure for testing")
+    print("\nAttempting Kaggle download...")
     
-    # Offer to create simulated dataset for testing
-    response = input("\nCreate simulated BreakHis dataset for testing? (y/n): ").strip().lower()
-    if response == 'y':
+    # Try Kaggle download
+    try:
+        from kaggle.api.kaggle_api_extended import KaggleApi
+        
+        # Initialize Kaggle API
+        api = KaggleApi()
+        api.authenticate()
+        
+        # Download dataset
+        print("Downloading BreakHis dataset from Kaggle...")
+        api.dataset_download_files('ambarish/breakhis', path=str(DATA_DIR), unzip=True)
+        
+        print(f"✓ BreakHis downloaded successfully")
+        return True
+        
+    except ImportError:
+        print("Kaggle package not installed. Installing...")
+        import subprocess
+        subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'kaggle', '-q'])
+        return download_breakhis()
+        
+    except Exception as e:
+        print(f"Kaggle download failed: {e}")
+        print("\nCreating simulated BreakHis dataset for testing...")
         return create_simulated_breakhis()
-    
-    return False
 
 
 def create_simulated_breakhis():
@@ -216,7 +229,7 @@ def create_simulated_breakhis():
 
 
 def download_wbcd():
-    """Download Wisconsin Breast Cancer Dataset."""
+    """Download Wisconsin Breast Cancer Dataset using ucimlrepo."""
     print("\n" + "="*70)
     print("Wisconsin Breast Cancer Dataset (WBCD)")
     print("="*70)
@@ -233,18 +246,44 @@ def download_wbcd():
     
     print(f"\nDownloading WBCD from UCI ML Repository...")
     
-    if download_file(DATASETS['wbcd']['url'], output_file, "Downloading WBCD"):
-        print(f"✓ WBCD downloaded successfully")
+    # Try using ucimlrepo
+    try:
+        from ucimlrepo import fetch_ucirepo
         
-        # Create preprocessing script
-        preprocess_script = final_dir / 'preprocess_wbcd.py'
-        print(f"\nPreprocessing script created: {preprocess_script}")
-        print("Run this script to prepare WBCD data for training.")
+        print("Fetching dataset from UCI ML Repository...")
+        breast_cancer_wisconsin_diagnostic = fetch_ucirepo(id=17)
         
+        # Get features and targets
+        X = breast_cancer_wisconsin_diagnostic.data.features
+        y = breast_cancer_wisconsin_diagnostic.data.targets
+        
+        # Combine into single dataframe
+        df = X.copy()
+        df['diagnosis'] = y
+        
+        # Save to CSV
+        df.to_csv(output_file, index=False)
+        
+        print(f"✓ WBCD downloaded successfully: {len(df)} samples")
         return True
-    else:
-        print("ERROR: Failed to download WBCD")
-        return False
+        
+    except ImportError:
+        print("ucimlrepo package not installed. Installing...")
+        import subprocess
+        subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'ucimlrepo', '-q'])
+        return download_wbcd()
+        
+    except Exception as e:
+        print(f"ucimlrepo download failed: {e}")
+        print("\nFalling back to direct download...")
+        
+        # Fallback to direct download
+        if download_file(DATASETS['wbcd']['url'], output_file, "Downloading WBCD"):
+            print(f"✓ WBCD downloaded successfully")
+            return True
+        else:
+            print("ERROR: Failed to download WBCD")
+            return False
 
 
 def download_seer():

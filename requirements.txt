@@ -44,6 +44,10 @@ requests>=2.31.0
 # OpenCV for image processing
 opencv-python>=4.8.0
 
+# Dataset loaders
+kaggle>=1.6.0
+ucimlrepo>=0.0.7
+
 # ───────────────────────────────────────────────────────────────────
 # Machine Learning & Metrics
 # ───────────────────────────────────────────────────────────────────
