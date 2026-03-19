@@ -27,7 +27,7 @@ NC='\033[0m' # No Color
 # Parse arguments
 QUICK_MODE=0
 DATASET="breakhis"
-FOLDS=2  # Minimum 2 folds (sklearn requirement)
+FOLDS=5  # Default to 5 folds for research-grade results
 
 while [[ $# -gt 0 ]]; do
     case $1 in
