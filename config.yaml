@@ -17,12 +17,12 @@ data:
 
 # ── Cross-Validation ────────────────────────────────────────────
 cv:
-  n_folds: 2  # Minimum is 2 (1-fold not supported by sklearn). Use 2 for quick comparison, 5 for final results
+  n_folds: 5  # 5-fold cross-validation for research-grade results
 
 # ── Training (shared defaults) ──────────────────────────────────
 training:
-  epochs: 30  # Reduced for quick comparison (set to 50 for final runs)
-  patience: 7  # Early stopping patience (monitors val AUC)
+  epochs: 50  # Full training epochs for research-grade results
+  patience: 10  # Early stopping patience (monitors val AUC)
   grad_clip: 1.0  # Gradient clipping max norm (0 = disabled)
 
 # ── Models to Run ───────────────────────────────────────────────
