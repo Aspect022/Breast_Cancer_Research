@@ -17,7 +17,7 @@ data:
 
 # ── Cross-Validation ────────────────────────────────────────────
 cv:
-  n_folds: 1  # Set to 1 for quick model comparison, 5 for final results
+  n_folds: 2  # Minimum is 2 (1-fold not supported by sklearn). Use 2 for quick comparison, 5 for final results
 
 # ── Training (shared defaults) ──────────────────────────────────
 training:

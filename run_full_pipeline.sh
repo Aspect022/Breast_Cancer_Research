@@ -27,7 +27,7 @@ NC='\033[0m' # No Color
 # Parse arguments
 QUICK_MODE=0
 DATASET="breakhis"
-FOLDS=1
+FOLDS=2  # Minimum 2 folds (sklearn requirement)
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -41,6 +41,11 @@ while [[ $# -gt 0 ]]; do
             ;;
         --folds)
             FOLDS="$2"
+            # Ensure minimum 2 folds
+            if [ "$FOLDS" -lt 2 ]; then
+                echo -e "${YELLOW}Warning: Minimum 2 folds required. Setting to 2.${NC}"
+                FOLDS=2
+            fi
             shift 2
             ;;
         *)
@@ -60,7 +65,7 @@ echo
 # Configuration
 echo -e "${YELLOW}Configuration:${NC}"
 echo "  Dataset: $DATASET"
-echo "  Folds: $FOLDS (1=quick comparison, 5=final results)"
+echo "  Folds: $FOLDS (2=quick comparison, 5=final results)"
 if [ $QUICK_MODE -eq 1 ]; then
     echo -e "  Mode: ${GREEN}QUICK TEST${NC} (subset=200, epochs=3)"
 else
