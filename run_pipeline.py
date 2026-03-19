@@ -461,6 +461,10 @@ def train_fold(
             patience_counter += 1
             if patience_counter >= patience:
                 print(f"    Early stop at epoch {epoch}")
+                # Ensure we have a saved model
+                if not os.path.exists(best_path):
+                    print(f"    Saving final model...")
+                    torch.save(model.state_dict(), best_path)
                 break
 
     fold_time = time.time() - fold_start

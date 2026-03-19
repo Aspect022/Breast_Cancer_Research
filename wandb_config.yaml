@@ -1,39 +1,18 @@
-# ═══════════════════════════════════════════════════════════════════
-# Weights & Biases Configuration
-# ═══════════════════════════════════════════════════════════════════
-# API Key for experiment tracking
-# ═══════════════════════════════════════════════════════════════════
-
-wandb:
-  # API Key (required for authentication)
-  api_key: "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"
-  
-  # Project settings
-  project: "breast-cancer-transformers"
-  entity: null  # Set to your W&B username/team name (optional)
-  
-  # Run configuration
-  group: null  # Group runs together (e.g., "transformer_comparison")
-  job_type: "training"
-  tags:
-    - "breast-cancer"
-    - "transformers"
-    - "quantum-ml"
-  
-  # Logging settings
-  log_model: true  # Log model checkpoints
-  log_gradients: true  # Log gradient histograms
-  log_weights: true  # Log weight distributions
-  save_code: true  # Save code to W&B
-  
-  # Visualization
-  log_images: true  # Log confusion matrices, ROC curves
-  log_gradcam: true  # Log Grad-CAM heatmaps
-  
-  # Performance
-  log_interval: 10  # Log every N batches
-  val_log_interval: 1  # Log every validation epoch
-  
-  # Sweep configuration (optional)
-  use_sweep: false
-  sweep_config: null
+# W&B Configuration
+api_key: "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"
+project: "breast-cancer-transformers"
+entity: "tgijayesh-dayananda-sagar-university"
+job_type: "training"
+tags:
+  - "breast-cancer"
+  - "transformers"
+  - "quantum-ml"
+log_model: true
+log_gradients: true
+log_weights: true
+save_code: true
+log_images: true
+log_gradcam: true
+log_interval: 10
+val_log_interval: 1
+use_sweep: false

@@ -87,7 +87,7 @@ class VectorizedQuantumGates:
             qubit: Qubit index
         
         Returns:
-            Updated state
+            Updated state (new tensor, not inplace)
         """
         batch_size = state.shape[0]
         n_qubits = int(math.log2(state.shape[1]))
@@ -96,7 +96,9 @@ class VectorizedQuantumGates:
         cos_half = torch.cos(angle / 2)
         sin_half = torch.sin(angle / 2)
         
-        # Apply rotation to each basis state
+        # Create new state tensor (avoid inplace operations)
+        new_state = state.clone()
+        
         for b in range(batch_size):
             for i in range(2 ** n_qubits):
                 # Check if qubit bit is 0 or 1
@@ -107,10 +109,10 @@ class VectorizedQuantumGates:
                     if partner_idx < 2 ** n_qubits:
                         old_i = state[b, i]
                         old_partner = state[b, partner_idx]
-                        state[b, i] = cos_half[b] * old_i - sin_half[b] * old_partner
-                        state[b, partner_idx] = sin_half[b] * old_i + cos_half[b] * old_partner
-        
-        return state
+                        new_state[b, i] = cos_half[b] * old_i - sin_half[b] * old_partner
+                        new_state[b, partner_idx] = sin_half[b] * old_i + cos_half[b] * old_partner
+
+        return new_state
     
     @staticmethod
     def apply_rx(state: torch.Tensor, angle: torch.Tensor, qubit: int) -> torch.Tensor:
@@ -121,6 +123,9 @@ class VectorizedQuantumGates:
         cos_half = torch.cos(angle / 2)
         isin_half = 1j * torch.sin(angle / 2)
         
+        # Create new state tensor (avoid inplace operations)
+        new_state = state.clone()
+        
         for b in range(batch_size):
             for i in range(2 ** n_qubits):
                 bit = (i >> qubit) & 1
@@ -129,10 +134,10 @@ class VectorizedQuantumGates:
                     if partner_idx < 2 ** n_qubits:
                         old_i = state[b, i]
                         old_partner = state[b, partner_idx]
-                        state[b, i] = cos_half[b] * old_i - isin_half[b] * old_partner
-                        state[b, partner_idx] = -isin_half[b] * old_i + cos_half[b] * old_partner
-        
-        return state
+                        new_state[b, i] = cos_half[b] * old_i - isin_half[b] * old_partner
+                        new_state[b, partner_idx] = -isin_half[b] * old_i + cos_half[b] * old_partner
+
+        return new_state
     
     @staticmethod
     def apply_rz(state: torch.Tensor, angle: torch.Tensor, qubit: int) -> torch.Tensor:
@@ -163,6 +168,9 @@ class VectorizedQuantumGates:
         batch_size = state.shape[0]
         n_qubits = int(math.log2(state.shape[1]))
         
+        # Create new state tensor (avoid inplace operations)
+        new_state = state.clone()
+        
         for b in range(batch_size):
             for i in range(2 ** n_qubits):
                 # Check if control qubit is |1⟩
@@ -171,9 +179,9 @@ class VectorizedQuantumGates:
                     # Flip target qubit
                     partner_idx = i ^ (1 << target)
                     if partner_idx < 2 ** n_qubits:
-                        state[b, i], state[b, partner_idx] = state[b, partner_idx], state[b, i]
-        
-        return state
+                        new_state[b, i], new_state[b, partner_idx] = state[b, partner_idx], state[b, i]
+
+        return new_state
 
 
 # ─────────────────────────────────────────────
