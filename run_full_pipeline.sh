@@ -9,9 +9,10 @@
 #   4. Run complete pipeline with all enabled models
 #   5. Generate results summary and statistical analysis
 #
-# Usage: ./run_full_pipeline.sh [--quick] [--dataset DATASET]
+# Usage: ./run_full_pipeline.sh [--quick] [--dataset DATASET] [--folds N]
 #   --quick    : Run with subset=200 and epochs=3 for testing
 #   --dataset  : Specify dataset (breakhis/wbcd/seer, default: breakhis)
+#   --folds N  : Number of CV folds (1 for quick, 5 for final, default: 1)
 # ═══════════════════════════════════════════════════════════════════
 
 set -e  # Exit on error
@@ -26,6 +27,7 @@ NC='\033[0m' # No Color
 # Parse arguments
 QUICK_MODE=0
 DATASET="breakhis"
+FOLDS=1
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -37,9 +39,13 @@ while [[ $# -gt 0 ]]; do
             DATASET="$2"
             shift 2
             ;;
+        --folds)
+            FOLDS="$2"
+            shift 2
+            ;;
         *)
             echo -e "${RED}Unknown option: $1${NC}"
-            echo "Usage: ./run_full_pipeline.sh [--quick] [--dataset DATASET]"
+            echo "Usage: ./run_full_pipeline.sh [--quick] [--dataset DATASET] [--folds N]"
             exit 1
             ;;
     esac
@@ -54,6 +60,7 @@ echo
 # Configuration
 echo -e "${YELLOW}Configuration:${NC}"
 echo "  Dataset: $DATASET"
+echo "  Folds: $FOLDS (1=quick comparison, 5=final results)"
 if [ $QUICK_MODE -eq 1 ]; then
     echo -e "  Mode: ${GREEN}QUICK TEST${NC} (subset=200, epochs=3)"
 else
@@ -173,8 +180,10 @@ EOF
     CONFIG_FILE=config_quick.yaml
     echo -e "${GREEN}✓${NC} Quick test config created"
 else
+    # Update folds in config.yaml
+    sed -i "s/n_folds: .*/n_folds: $FOLDS  # Set via command line/" config.yaml
     CONFIG_FILE=config.yaml
-    echo -e "${GREEN}✓${NC} Using full configuration"
+    echo -e "${GREEN}✓${NC} Using full configuration ($FOLDS folds)"
 fi
 echo
 

@@ -17,12 +17,12 @@ data:
 
 # ── Cross-Validation ────────────────────────────────────────────
 cv:
-  n_folds: 5  # Number of folds for GroupKFold
+  n_folds: 1  # Set to 1 for quick model comparison, 5 for final results
 
 # ── Training (shared defaults) ──────────────────────────────────
 training:
-  epochs: 50  # Maximum epochs (increase for final runs)
-  patience: 10  # Early stopping patience (monitors val AUC)
+  epochs: 30  # Reduced for quick comparison (set to 50 for final runs)
+  patience: 7  # Early stopping patience (monitors val AUC)
   grad_clip: 1.0  # Gradient clipping max norm (0 = disabled)
 
 # ── Models to Run ───────────────────────────────────────────────
