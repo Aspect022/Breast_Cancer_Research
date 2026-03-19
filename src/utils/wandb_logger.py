@@ -252,21 +252,27 @@ class WandBLogger:
         for name, param in model.named_parameters():
             if param.dim() > 1:
                 # Log weight histograms
-                wandb.log({
-                    f"weights/{name}": wandb.Histogram(param.detach().cpu().numpy()),
-                }, step=epoch)
+                weights_np = param.detach().cpu().numpy()
+                if not np.isnan(weights_np).any():
+                    wandb.log({
+                        f"weights/{name}": wandb.Histogram(weights_np),
+                    }, step=epoch)
                 
                 # Log gradient histograms if available
                 if param.grad is not None:
-                    wandb.log({
-                        f"gradients/{name}": wandb.Histogram(param.grad.detach().cpu().numpy()),
-                    }, step=epoch)
+                    grad_np = param.grad.detach().cpu().numpy()
+                    if not np.isnan(grad_np).any() and not np.isinf(grad_np).any():
+                        wandb.log({
+                            f"gradients/{name}": wandb.Histogram(grad_np),
+                        }, step=epoch)
             
             elif param.dim() == 1:
                 # Log biases
-                wandb.log({
-                    f"biases/{name}": wandb.Histogram(param.detach().cpu().numpy()),
-                }, step=epoch)
+                biases_np = param.detach().cpu().numpy()
+                if not np.isnan(biases_np).any():
+                    wandb.log({
+                        f"biases/{name}": wandb.Histogram(biases_np),
+                    }, step=epoch)
     
     def log_confusion_matrix(
         self,
