@@ -27,11 +27,24 @@ from torch.cuda.amp import GradScaler, autocast
 # Add project root to path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from src.data.dataset import get_kfold_splits, set_seed
+from src.data.dataset import get_kfold_splits, set_seed, get_multidataset_dataloaders
 from src.models.efficientnet import get_efficientnet_b3
 from src.models.spiking import get_spiking_cnn
-from src.models.transformer import get_hybrid_vit, get_vit_tiny
-from src.models.quantum import get_quantum_hybrid
+from src.models.transformer import (
+    get_hybrid_vit, get_vit_tiny,
+    get_swin_tiny, get_swin_small, get_swin_v2_small,
+    get_convnext_tiny, get_convnext_small,
+    get_deit_tiny, get_deit_small, get_deit_base,
+)
+from src.models.quantum import (
+    get_quantum_hybrid,
+    get_qenn,
+    get_vectorized_quantum_circuit,
+)
+from src.models.fusion import (
+    get_dual_branch_fusion,
+    get_quantum_enhanced_fusion,
+)
 from src.utils.metrics import (
     compute_metrics, print_medical_metrics, get_convergence_epoch,
     plot_training_curves, plot_confusion_matrix, plot_roc_curve,
@@ -61,9 +74,12 @@ TASK_CLASS_NAMES = {
 
 def build_model(model_name, num_classes, model_cfg):
     """Build model. Returns (model, display_name, paradigm_type)."""
+    
+    # ── Baseline CNN ─────────────────────────────────────────
     if model_name == 'efficientnet':
         return get_efficientnet_b3(num_classes), 'EfficientNet-B3', 'cnn'
 
+    # ── Spiking Neural Network (Legacy) ──────────────────────
     elif model_name == 'spiking':
         model = get_spiking_cnn(
             num_classes=num_classes,
@@ -74,6 +90,7 @@ def build_model(model_name, num_classes, model_cfg):
         )
         return model, 'SpikingCNN-LIF', 'snn'
 
+    # ── Transformer Models ───────────────────────────────────
     elif model_name == 'hybrid_vit':
         model = get_hybrid_vit(
             num_classes=num_classes,
@@ -92,6 +109,90 @@ def build_model(model_name, num_classes, model_cfg):
         )
         return model, 'ViT-Tiny', 'transformer'
 
+    # Swin Transformer variants
+    elif model_name == 'swin_tiny':
+        model = get_swin_tiny(
+            num_classes=num_classes,
+            img_size=model_cfg.get('img_size', 224),
+            pretrained=model_cfg.get('pretrained', True),
+            dropout=model_cfg.get('dropout', 0.3),
+            freeze_backbone=model_cfg.get('freeze_backbone', False),
+        )
+        return model, 'Swin-Tiny', 'transformer'
+
+    elif model_name == 'swin_small':
+        model = get_swin_small(
+            num_classes=num_classes,
+            img_size=model_cfg.get('img_size', 224),
+            pretrained=model_cfg.get('pretrained', True),
+            dropout=model_cfg.get('dropout', 0.3),
+            freeze_backbone=model_cfg.get('freeze_backbone', False),
+        )
+        return model, 'Swin-Small', 'transformer'
+
+    elif model_name == 'swin_v2_small':
+        model = get_swin_v2_small(
+            num_classes=num_classes,
+            img_size=model_cfg.get('img_size', 256),
+            pretrained=model_cfg.get('pretrained', True),
+            dropout=model_cfg.get('dropout', 0.3),
+            freeze_backbone=model_cfg.get('freeze_backbone', False),
+        )
+        return model, 'Swin-V2-Small', 'transformer'
+
+    # ConvNeXt variants
+    elif model_name == 'convnext_tiny':
+        model = get_convnext_tiny(
+            num_classes=num_classes,
+            pretrained=model_cfg.get('pretrained', True),
+            dropout=model_cfg.get('dropout', 0.3),
+            drop_path_rate=model_cfg.get('drop_path_rate', 0.1),
+            freeze_backbone=model_cfg.get('freeze_backbone', False),
+        )
+        return model, 'ConvNeXt-Tiny', 'transformer'
+
+    elif model_name == 'convnext_small':
+        model = get_convnext_small(
+            num_classes=num_classes,
+            pretrained=model_cfg.get('pretrained', True),
+            dropout=model_cfg.get('dropout', 0.3),
+            drop_path_rate=model_cfg.get('drop_path_rate', 0.1),
+            freeze_backbone=model_cfg.get('freeze_backbone', False),
+        )
+        return model, 'ConvNeXt-Small', 'transformer'
+
+    # DeiT variants
+    elif model_name == 'deit_tiny':
+        model = get_deit_tiny(
+            num_classes=num_classes,
+            pretrained=model_cfg.get('pretrained', True),
+            dropout=model_cfg.get('dropout', 0.1),
+            use_distillation=model_cfg.get('use_distillation', True),
+            freeze_backbone=model_cfg.get('freeze_backbone', False),
+        )
+        return model, 'DeiT-Tiny', 'transformer'
+
+    elif model_name == 'deit_small':
+        model = get_deit_small(
+            num_classes=num_classes,
+            pretrained=model_cfg.get('pretrained', True),
+            dropout=model_cfg.get('dropout', 0.1),
+            use_distillation=model_cfg.get('use_distillation', True),
+            freeze_backbone=model_cfg.get('freeze_backbone', False),
+        )
+        return model, 'DeiT-Small', 'transformer'
+
+    elif model_name == 'deit_base':
+        model = get_deit_base(
+            num_classes=num_classes,
+            pretrained=model_cfg.get('pretrained', True),
+            dropout=model_cfg.get('dropout', 0.1),
+            use_distillation=model_cfg.get('use_distillation', True),
+            freeze_backbone=model_cfg.get('freeze_backbone', False),
+        )
+        return model, 'DeiT-Base', 'transformer'
+
+    # ── Quantum Models ───────────────────────────────────────
     elif model_name == 'quantum':
         model = get_quantum_hybrid(
             num_classes=num_classes,
@@ -102,6 +203,47 @@ def build_model(model_name, num_classes, model_cfg):
             dropout=model_cfg.get('dropout', 0.3),
         )
         return model, 'CNN+PQC', 'quantum'
+
+    # QENN variants (all rotation configurations)
+    elif model_name.startswith('qenn_'):
+        rotation_config = model_name.replace('qenn_', '')
+        model = get_qenn(
+            num_classes=num_classes,
+            n_qubits=model_cfg.get('n_qubits', 8),
+            n_layers=model_cfg.get('n_layers', 2),
+            rotation_config=model_cfg.get('rotation_config', rotation_config),
+            entanglement=model_cfg.get('entanglement', 'cyclic'),
+            dropout=model_cfg.get('dropout', 0.3),
+            freeze_backbone=model_cfg.get('freeze_backbone', False),
+        )
+        return model, f'QENN-{rotation_config.upper()}', 'quantum'
+
+    # ── Fusion Models ────────────────────────────────────────
+    elif model_name == 'dual_branch_fusion':
+        model = get_dual_branch_fusion(
+            num_classes=num_classes,
+            swin_variant=model_cfg.get('swin_variant', 'tiny'),
+            convnext_variant=model_cfg.get('convnext_variant', 'tiny'),
+            dropout=model_cfg.get('dropout', 0.3),
+            entropy_weight=model_cfg.get('entropy_weight', 0.01),
+            freeze_backbones=model_cfg.get('freeze_backbones', False),
+        )
+        return model, 'DualBranch-Fusion', 'fusion'
+
+    elif model_name == 'quantum_enhanced_fusion':
+        model = get_quantum_enhanced_fusion(
+            num_classes=num_classes,
+            swin_variant=model_cfg.get('swin_variant', 'tiny'),
+            convnext_variant=model_cfg.get('convnext_variant', 'tiny'),
+            n_qubits=model_cfg.get('n_qubits', 8),
+            n_layers=model_cfg.get('n_layers', 2),
+            rotation_config=model_cfg.get('rotation_config', 'ry_only'),
+            entanglement=model_cfg.get('entanglement', 'cyclic'),
+            dropout=model_cfg.get('dropout', 0.3),
+            entropy_weight=model_cfg.get('entropy_weight', 0.01),
+            freeze_backbones=model_cfg.get('freeze_backbones', False),
+        )
+        return model, 'Quantum-Enhanced-Fusion', 'fusion_quantum'
 
     else:
         raise ValueError(f"Unknown model: {model_name}")
@@ -529,11 +671,51 @@ def main():
     parser.add_argument('--config', type=str, default='config.yaml')
     parser.add_argument('--models', nargs='+', default=None,
                         help='Specific models to run (overrides config)')
+    parser.add_argument('--dataset', type=str, default=None,
+                        help='Dataset to use: breakhis, wbcd, seer (overrides config)')
     args = parser.parse_args()
 
     cfg = load_config(args.config)
 
-    model_order = ['efficientnet', 'spiking', 'hybrid_vit', 'vit_tiny', 'quantum']
+    # Override dataset if specified
+    if args.dataset:
+        cfg['data']['dataset'] = args.dataset
+        if args.dataset == 'wbcd':
+            cfg['data']['data_dir'] = 'data/WBCD'
+        elif args.dataset == 'seer':
+            cfg['data']['data_dir'] = 'data/SEER'
+        elif args.dataset == 'breakhis':
+            cfg['data']['data_dir'] = 'data/BreaKHis_v1'
+
+    # Updated model order with all new architectures
+    model_order = [
+        # Baseline
+        'efficientnet',
+        'spiking',  # Legacy
+        'hybrid_vit',
+        'vit_tiny',
+        
+        # Transformer zoo (Phase 1-2)
+        'swin_tiny',
+        'swin_small',
+        'swin_v2_small',
+        'convnext_tiny',
+        'convnext_small',
+        'deit_tiny',
+        'deit_small',
+        'deit_base',
+        
+        # Fusion models (Phase 2)
+        'dual_branch_fusion',
+        
+        # Quantum models (Phase 3)
+        'quantum',  # PennyLane legacy
+        'qenn_ry',
+        'qenn_ry_rz',
+        'qenn_u3',
+        'qenn_rx_ry_rz',
+        'quantum_enhanced_fusion',
+    ]
 
     if args.models:
         models_to_run = [m for m in args.models if m in model_order]
@@ -544,6 +726,22 @@ def main():
         print("No models enabled! Check config.yaml or use --models flag.")
         return
 
+    # A100 GPU Optimizations
+    if torch.cuda.is_available():
+        gpu_cfg = cfg.get('gpu', {})
+        if gpu_cfg.get('use_tf32', True):
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.backends.cudnn.allow_tf32 = True
+        if gpu_cfg.get('benchmark_mode', True):
+            torch.backends.cudnn.benchmark = True
+        if gpu_cfg.get('deterministic', False):
+            torch.backends.cudnn.deterministic = True
+        
+        print(f"\n🚀 A100 GPU Optimizations Enabled:")
+        print(f"   TF32: {torch.backends.cuda.matmul.allow_tf32}")
+        print(f"   cuDNN Benchmark: {torch.backends.cudnn.benchmark}")
+        print(f"   Device: {torch.cuda.get_device_name(0)}")
+    
     set_seed(cfg['data'].get('seed', 42))
 
     print("╔══════════════════════════════════════════════════════════════╗")

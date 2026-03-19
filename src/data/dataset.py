@@ -7,15 +7,28 @@ from torchvision import transforms
 from PIL import Image
 from sklearn.model_selection import GroupShuffleSplit, GroupKFold
 import pandas as pd
+from typing import Optional, Tuple, Dict
 
 def set_seed(seed=42):
     """Ensure reproducibility."""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    torch.cuda.manual_all(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
+
+# ─────────────────────────────────────────────
+# Multi-Dataset Support
+# ─────────────────────────────────────────────
+
+SUPPORTED_DATASETS = ['breakhis', 'wbcd', 'seer']
+DATASET_NAMES = {
+    'breakhis': 'BreakHis Histopathology',
+    'wbcd': 'Wisconsin Breast Cancer',
+    'seer': 'SEER Breast Cancer',
+}
 
 class BreakHisDataset(Dataset):
     """
@@ -289,4 +302,388 @@ def get_kfold_splits(data_dir, task="binary", n_folds=5, batch_size=32,
         )
 
         yield fold_idx, train_loader, val_loader, test_loader, num_classes
+
+
+# ─────────────────────────────────────────────
+# Wisconsin Breast Cancer Dataset (WBCD) Loader
+# ─────────────────────────────────────────────
+
+class WBCDDataset(Dataset):
+    """
+    Dataset loader for Wisconsin Breast Cancer Dataset (WBCD).
+    
+    WBCD contains features computed from digitized images of fine needle aspirates
+    of breast masses, with labels for benign and malignant cases.
+    
+    Features (10 real-valued):
+    - radius, texture, perimeter, area, smoothness
+    - compactness, concavity, concave points, symmetry, fractal dimension
+    
+    Label: 0 = benign, 1 = malignant
+    """
+    
+    def __init__(
+        self,
+        data_path: str,
+        transform: Optional[transforms.Compose] = None,
+        subset_size: Optional[int] = None,
+        seed: int = 42,
+    ):
+        self.data_path = data_path
+        self.transform = transform
+        
+        # Load data
+        df = self._load_wbcd(data_path)
+        
+        if subset_size is not None:
+            df = df.sample(n=min(subset_size, len(df)), random_state=seed)
+        
+        self.data = df.drop('label', axis=1).values.astype(np.float32)
+        self.labels = df['label'].values.astype(np.int64)
+    
+    def _load_wbcd(self, data_path: str) -> pd.DataFrame:
+        """Load WBCD dataset from CSV."""
+        df = pd.read_csv(data_path)
+        
+        # Handle different column naming conventions
+        if 'diagnosis' in df.columns:
+            # Map diagnosis to binary label
+            df['label'] = (df['diagnosis'] == 'M').astype(int)
+            df = df.drop('diagnosis', axis=1)
+        elif 'Label' in df.columns:
+            df = df.rename(columns={'Label': 'label'})
+        
+        # Drop ID column if present
+        if 'id' in df.columns or 'ID' in df.columns:
+            df = df.drop(columns=[c for c in df.columns if c.lower() == 'id'], axis=1)
+        
+        return df
+    
+    def __len__(self) -> int:
+        return len(self.data)
+    
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
+        sample = self.data[idx].copy()
+        label = self.labels[idx]
+        
+        # Convert to image-like format for model compatibility
+        # Reshape to (1, 10, 1) and apply transform if any
+        sample = sample.reshape(1, -1, 1)
+        
+        if self.transform:
+            # For tabular data, we skip image transforms
+            pass
+        
+        sample = torch.from_numpy(sample).float()
+        # Flatten for fully connected layers
+        sample = sample.view(-1)
+        
+        return sample, label
+
+
+def get_wbcd_dataloaders(
+    data_path: str,
+    batch_size: int = 32,
+    subset_size: Optional[int] = None,
+    num_workers: int = 4,
+    seed: int = 42,
+    val_split: float = 0.15,
+    test_split: float = 0.15,
+) -> Tuple[DataLoader, DataLoader, DataLoader, int]:
+    """
+    Create DataLoaders for WBCD dataset.
+    
+    Args:
+        data_path: Path to WBCD CSV file.
+        batch_size: Batch size.
+        subset_size: Optional subset size for testing.
+        num_workers: DataLoader workers.
+        seed: Random seed.
+        val_split: Validation split ratio.
+        test_split: Test split ratio.
+    
+    Returns:
+        (train_loader, val_loader, test_loader, num_classes)
+    """
+    set_seed(seed)
+    
+    # Load full dataset
+    df = pd.read_csv(data_path)
+    
+    if 'diagnosis' in df.columns:
+        df['label'] = (df['diagnosis'] == 'M').astype(int)
+        df = df.drop('diagnosis', axis=1)
+    
+    # Drop ID if present
+    id_cols = [c for c in df.columns if c.lower() == 'id']
+    if id_cols:
+        df = df.drop(columns=id_cols)
+    
+    if subset_size:
+        df = df.sample(n=min(subset_size, len(df)), random_state=seed)
+    
+    # Split data
+    from sklearn.model_selection import train_test_split
+    
+    X = df.drop('label', axis=1).values
+    y = df['label'].values
+    
+    # First split: train+val vs test
+    X_trainval, X_test, y_trainval, y_test = train_test_split(
+        X, y, test_size=test_split, random_state=seed, stratify=y
+    )
+    
+    # Second split: train vs val
+    X_train, X_val, y_train, y_val = train_test_split(
+        X_trainval, y_trainval, test_size=val_split/(1-test_split), 
+        random_state=seed, stratify=y_trainval
+    )
+    
+    # Create simple tensor datasets
+    from torch.utils.data import TensorDataset
+    
+    train_ds = TensorDataset(
+        torch.from_numpy(X_train).float(),
+        torch.from_numpy(y_train).long()
+    )
+    val_ds = TensorDataset(
+        torch.from_numpy(X_val).float(),
+        torch.from_numpy(y_val).long()
+    )
+    test_ds = TensorDataset(
+        torch.from_numpy(X_test).float(),
+        torch.from_numpy(y_test).long()
+    )
+    
+    train_loader = DataLoader(
+        train_ds, batch_size=batch_size, shuffle=True,
+        num_workers=num_workers, pin_memory=True
+    )
+    val_loader = DataLoader(
+        val_ds, batch_size=batch_size, shuffle=False,
+        num_workers=num_workers, pin_memory=True
+    )
+    test_loader = DataLoader(
+        test_ds, batch_size=batch_size, shuffle=False,
+        num_workers=num_workers, pin_memory=True
+    )
+    
+    return train_loader, val_loader, test_loader, 2
+
+
+# ─────────────────────────────────────────────
+# SEER Breast Cancer Dataset Loader
+# ─────────────────────────────────────────────
+
+class SEERDataset(Dataset):
+    """
+    Dataset loader for SEER Breast Cancer Dataset.
+    
+    SEER (Surveillance, Epidemiology, and End Results Program) contains
+    cancer incidence and survival data from multiple registries.
+    
+    Typical features:
+    - Age at diagnosis
+    - Race/ethnicity
+    - Tumor size, grade, stage
+    - Survival time, vital status
+    
+    This loader expects preprocessed SEER data in CSV format.
+    """
+    
+    def __init__(
+        self,
+        data_path: str,
+        transform: Optional[transforms.Compose] = None,
+        subset_size: Optional[int] = None,
+        seed: int = 42,
+        target_column: str = 'VitalStatusRecoded',
+    ):
+        self.data_path = data_path
+        self.transform = transform
+        self.target_column = target_column
+        
+        # Load data
+        df = self._load_seer(data_path, target_column)
+        
+        if subset_size is not None:
+            df = df.sample(n=min(subset_size, len(df)), random_state=seed)
+        
+        # Separate features and labels
+        feature_cols = [c for c in df.columns if c != 'label']
+        self.data = df[feature_cols].values.astype(np.float32)
+        self.labels = df['label'].values.astype(np.int64)
+    
+    def _load_seer(self, data_path: str, target_column: str) -> pd.DataFrame:
+        """Load and preprocess SEER dataset."""
+        df = pd.read_csv(data_path)
+        
+        # Map target to binary label if needed
+        if target_column in df.columns:
+            if df[target_column].dtype == 'object':
+                # Binary classification: Alive vs Deceased
+                df['label'] = (df[target_column] == 'Alive').astype(int)
+            else:
+                df['label'] = df[target_column]
+            df = df.drop(target_column, axis=1)
+        elif 'label' not in df.columns:
+            raise ValueError(f"Target column '{target_column}' not found in data")
+        
+        # Handle missing values
+        df = df.fillna(df.median(numeric_only=True))
+        
+        # Drop rows with remaining NaN
+        df = df.dropna()
+        
+        return df
+    
+    def __len__(self) -> int:
+        return len(self.data)
+    
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
+        sample = self.data[idx].copy()
+        label = self.labels[idx]
+        
+        sample = torch.from_numpy(sample).float()
+        return sample, label
+
+
+def get_seer_dataloaders(
+    data_path: str,
+    batch_size: int = 32,
+    subset_size: Optional[int] = None,
+    num_workers: int = 4,
+    seed: int = 42,
+    val_split: float = 0.15,
+    test_split: float = 0.15,
+    target_column: str = 'VitalStatusRecoded',
+) -> Tuple[DataLoader, DataLoader, DataLoader, int]:
+    """
+    Create DataLoaders for SEER dataset.
+    
+    Args:
+        data_path: Path to SEER CSV file.
+        batch_size: Batch size.
+        subset_size: Optional subset size.
+        num_workers: DataLoader workers.
+        seed: Random seed.
+        val_split: Validation split.
+        test_split: Test split.
+        target_column: Target column for prediction.
+    
+    Returns:
+        (train_loader, val_loader, test_loader, num_classes)
+    """
+    set_seed(seed)
+    
+    df = pd.read_csv(data_path)
+    
+    # Map target
+    if target_column in df.columns:
+        if df[target_column].dtype == 'object':
+            df['label'] = (df[target_column] == 'Alive').astype(int)
+        else:
+            df['label'] = df[target_column]
+        df = df.drop(target_column, axis=1)
+    
+    # Handle missing values
+    df = df.fillna(df.median(numeric_only=True))
+    df = df.dropna()
+    
+    if subset_size:
+        df = df.sample(n=min(subset_size, len(df)), random_state=seed)
+    
+    # Split
+    from sklearn.model_selection import train_test_split
+    
+    X = df.drop('label', axis=1).values
+    y = df['label'].values
+    
+    X_trainval, X_test, y_trainval, y_test = train_test_split(
+        X, y, test_size=test_split, random_state=seed, stratify=y if len(np.unique(y)) > 1 else None
+    )
+    
+    if len(np.unique(y_trainval)) > 1:
+        X_train, X_val, y_train, y_val = train_test_split(
+            X_trainval, y_trainval, test_size=val_split/(1-test_split),
+            random_state=seed, stratify=y_trainval
+        )
+    else:
+        X_train, X_val, y_train, y_val = train_test_split(
+            X_trainval, y_trainval, test_size=val_split/(1-test_split),
+            random_state=seed
+        )
+    
+    from torch.utils.data import TensorDataset
+    
+    train_ds = TensorDataset(torch.from_numpy(X_train).float(), torch.from_numpy(y_train).long())
+    val_ds = TensorDataset(torch.from_numpy(X_val).float(), torch.from_numpy(y_val).long())
+    test_ds = TensorDataset(torch.from_numpy(X_test).float(), torch.from_numpy(y_test).long())
+    
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
+    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
+    test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
+    
+    return train_loader, val_loader, test_loader, 2
+
+
+# ─────────────────────────────────────────────
+# Unified Multi-Dataset Loader
+# ─────────────────────────────────────────────
+
+def get_multidataset_dataloaders(
+    dataset_name: str,
+    data_dir: str,
+    batch_size: int = 32,
+    subset_size: Optional[int] = None,
+    num_workers: int = 4,
+    seed: int = 42,
+) -> Tuple[DataLoader, DataLoader, DataLoader, int]:
+    """
+    Unified dataloader for multiple breast cancer datasets.
+    
+    Args:
+        dataset_name: 'breakhis', 'wbcd', or 'seer'.
+        data_dir: Data directory path.
+        batch_size: Batch size.
+        subset_size: Optional subset size.
+        num_workers: DataLoader workers.
+        seed: Random seed.
+    
+    Returns:
+        (train_loader, val_loader, test_loader, num_classes)
+    """
+    if dataset_name == 'breakhis':
+        return get_dataloaders(
+            data_dir=data_dir,
+            task='binary',
+            batch_size=batch_size,
+            subset_size=subset_size,
+            num_workers=num_workers,
+        )
+    elif dataset_name == 'wbcd':
+        data_path = os.path.join(data_dir, 'wbcd.csv')
+        if not os.path.exists(data_path):
+            data_path = data_dir  # Try direct path
+        return get_wbcd_dataloaders(
+            data_path=data_path,
+            batch_size=batch_size,
+            subset_size=subset_size,
+            num_workers=num_workers,
+            seed=seed,
+        )
+    elif dataset_name == 'seer':
+        data_path = os.path.join(data_dir, 'seer.csv')
+        if not os.path.exists(data_path):
+            data_path = data_dir
+        return get_seer_dataloaders(
+            data_path=data_path,
+            batch_size=batch_size,
+            subset_size=subset_size,
+            num_workers=num_workers,
+            seed=seed,
+        )
+    else:
+        raise ValueError(f"Unknown dataset: {dataset_name}. "
+                        f"Choose from: {SUPPORTED_DATASETS}")
 

@@ -1,63 +1,70 @@
 # ══════════════════════════════════════════════════════════════════
-# Breast Cancer Histopathology — Experiment Configuration
+# Breast Cancer Histopathology — Complete Experiment Configuration
 # ══════════════════════════════════════════════════════════════════
-# Edit this file to control ALL training runs via run_pipeline.py
+# Updated: 2026-03-19
+# Includes: All transformer variants, quantum circuits, fusion models
 # ══════════════════════════════════════════════════════════════════
 
 # ── Dataset ──────────────────────────────────────────────────────
 data:
-  data_dir: "data/BreaKHis_v1" # Path to BreakHis root directory
-  task: "binary" # "binary" (Benign/Malignant) or "multi" (IDC/ILC/Fibroadenoma)
-  subset: null # Set to an integer (e.g. 200) for quick sanity checks, null for full dataset
-  num_workers: 4 # DataLoader workers
-  seed: 42 # Random seed for reproducibility
+  # Primary dataset
+  dataset: "breakhis"  # Options: breakhis, wbcd, seer
+  data_dir: "data/BreaKHis_v1"  # Path to dataset
+  task: "binary"  # "binary" or "multi" (multi-class for BreakHis)
+  subset: null  # Set to integer (e.g., 200) for quick tests, null for full
+  num_workers: 8  # DataLoader workers (increase for A100)
+  seed: 42  # Random seed
 
 # ── Cross-Validation ────────────────────────────────────────────
 cv:
-  n_folds: 5 # Number of folds for GroupKFold (patient-grouped)
+  n_folds: 5  # Number of folds for GroupKFold
 
-# ── Training (shared defaults, overridden per-model below) ──────
+# ── Training (shared defaults) ──────────────────────────────────
 training:
-  epochs: 30 # Maximum epochs
-  patience: 7 # Early stopping patience (monitors val AUC)
-  grad_clip: 1.0 # Gradient clipping max norm (0 = disabled)
+  epochs: 50  # Maximum epochs (increase for final runs)
+  patience: 10  # Early stopping patience (monitors val AUC)
+  grad_clip: 1.0  # Gradient clipping max norm (0 = disabled)
 
 # ── Models to Run ───────────────────────────────────────────────
-# Set "enabled: true/false" to include/exclude a model from the pipeline run.
+# Set "enabled: true/false" to include/exclude models
 
 models:
+  # ════════════════════════════════════════════════════════════
+  # BASELINE MODELS
+  # ════════════════════════════════════════════════════════════
+  
   # 1. EfficientNet-B3 Baseline
   efficientnet:
     enabled: true
     batch_size: 32
     lr: 1.0e-4
     weight_decay: 1.0e-4
-    use_amp: true # Mixed precision training
+    use_amp: true  # Mixed precision (A100 optimized)
 
-  # 2. Spiking CNN (LIF-SNN)
+  # 2. Spiking CNN (LIF-SNN) - Legacy, clinically unusable
   spiking:
-    enabled: true
-    batch_size: 16 # Smaller due to SNN time-step loop
+    enabled: false  # Disabled per project decision
+    batch_size: 16
     lr: 8.0e-4
     weight_decay: 1.0e-4
-    use_amp: false # Not compatible with surrogate gradients
-    num_steps: 10 # SNN time steps (10-20)
-    beta: 0.9 # LIF membrane decay
-    threshold: 1.0 # LIF spike threshold
+    use_amp: false
+    num_steps: 10
+    beta: 0.9
+    threshold: 1.0
     dropout: 0.5
 
-  # 3. Hybrid CNN+ViT (EfficientNet-B3 backbone + Transformer head)
+  # 3. Hybrid CNN+ViT
   hybrid_vit:
     enabled: true
     batch_size: 32
     lr: 1.0e-4
     weight_decay: 1.0e-4
     use_amp: true
-    d_model: 256 # Transformer embedding dim
-    num_heads: 4 # Attention heads
-    num_layers: 2 # Transformer encoder layers
+    d_model: 256
+    num_heads: 4
+    num_layers: 2
     dropout: 0.1
-    warmup_epochs: 5 # LR warmup
+    warmup_epochs: 5
     freeze_backbone: false
 
   # 4. Pure ViT-Tiny
@@ -70,22 +77,242 @@ models:
     dropout: 0.1
     warmup_epochs: 5
 
-  # 5. Quantum-Classical Hybrid (EfficientNet-B3 + PQC)
-  quantum:
+  # ════════════════════════════════════════════════════════════
+  # TRANSFORMER MODELS (New - Phase 1-2)
+  # ════════════════════════════════════════════════════════════
+  
+  # 5. Swin Transformer Tiny
+  swin_tiny:
     enabled: true
-    batch_size: 8 # Very small — quantum sim is slow
+    batch_size: 32
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    img_size: 224
+    pretrained: true
+    dropout: 0.3
+
+  # 6. Swin Transformer Small
+  swin_small:
+    enabled: true
+    batch_size: 32
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    img_size: 224
+    pretrained: true
+    dropout: 0.3
+
+  # 7. Swin Transformer V2 Small
+  swin_v2_small:
+    enabled: true
+    batch_size: 16  # Smaller due to 256×256 input
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    img_size: 256
+    pretrained: true
+    dropout: 0.3
+
+  # 8. ConvNeXt Tiny
+  convnext_tiny:
+    enabled: true
+    batch_size: 32
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    pretrained: true
+    dropout: 0.3
+    drop_path_rate: 0.1
+
+  # 9. ConvNeXt Small
+  convnext_small:
+    enabled: true
+    batch_size: 32
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    pretrained: true
+    dropout: 0.3
+    drop_path_rate: 0.1
+
+  # 10. DeiT Tiny (with distillation)
+  deit_tiny:
+    enabled: true
+    batch_size: 32
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    pretrained: true
+    dropout: 0.1
+    use_distillation: true
+
+  # 11. DeiT Small
+  deit_small:
+    enabled: true
+    batch_size: 32
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    pretrained: true
+    dropout: 0.1
+    use_distillation: true
+
+  # 12. DeiT Base
+  deit_base:
+    enabled: false  # Large model, enable if VRAM permits
+    batch_size: 16
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    pretrained: true
+    dropout: 0.1
+    use_distillation: true
+
+  # ════════════════════════════════════════════════════════════
+  # FUSION MODELS (New - Phase 2)
+  # ════════════════════════════════════════════════════════════
+  
+  # 13. Dual-Branch Dynamic Fusion (Swin + ConvNeXt)
+  dual_branch_fusion:
+    enabled: true
+    batch_size: 16  # Smaller due to two backbones
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    swin_variant: "tiny"  # Options: tiny, small, v2_small
+    convnext_variant: "tiny"  # Options: tiny, small, base
+    dropout: 0.3
+    entropy_weight: 0.01  # Entropy regularization weight
+    gate_temperature: 1.0
+
+  # ════════════════════════════════════════════════════════════
+  # QUANTUM MODELS (New - Phase 3)
+  # ════════════════════════════════════════════════════════════
+  
+  # 14. QENN (Quantum-Enhanced Neural Network) - RY-only
+  qenn_ry:
+    enabled: true
+    batch_size: 16
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: false  # Quantum may not support AMP
+    n_qubits: 8
+    n_layers: 2
+    rotation_config: "ry_only"  # RY-only rotation
+    entanglement: "cyclic"  # CNOT ring
+    dropout: 0.3
+
+  # 15. QENN - RY+RZ rotation
+  qenn_ry_rz:
+    enabled: true
+    batch_size: 16
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: false
+    n_qubits: 8
+    n_layers: 2
+    rotation_config: "ry_rz"  # RY + RZ rotations
+    entanglement: "cyclic"
+    dropout: 0.3
+
+  # 16. QENN - U3 rotation (full single-qubit)
+  qenn_u3:
+    enabled: true
+    batch_size: 16
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: false
+    n_qubits: 8
+    n_layers: 2
+    rotation_config: "u3"  # U3(θ, φ, λ) full rotation
+    entanglement: "cyclic"
+    dropout: 0.3
+
+  # 17. QENN - RX+RY+RZ rotation (maximum expressivity)
+  qenn_rx_ry_rz:
+    enabled: true
+    batch_size: 16
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: false
+    n_qubits: 8
+    n_layers: 2
+    rotation_config: "rx_ry_rz"  # All three rotations
+    entanglement: "cyclic"
+    dropout: 0.3
+
+  # 18. Quantum-Enhanced Fusion (Swin+ConvNeXt+Quantum)
+  quantum_enhanced_fusion:
+    enabled: true
+    batch_size: 16
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: false
+    swin_variant: "tiny"
+    convnext_variant: "tiny"
+    n_qubits: 8
+    n_layers: 2
+    rotation_config: "ry_only"  # Will be ablated
+    entanglement: "cyclic"  # Will be ablated
+    dropout: 0.3
+    entropy_weight: 0.01
+
+  # 19. CNN+PQC (PennyLane fallback - legacy)
+  quantum:
+    enabled: false  # Disabled - use vectorized quantum instead
+    batch_size: 8
     lr: 1.0e-4
     weight_decay: 1.0e-4
-    use_amp: false # PennyLane requires float32
-    n_qubits: 8 # Qubits for PQC
-    n_layers: 2 # PQC variational layers
+    use_amp: false
+    n_qubits: 8
+    n_layers: 2
     dropout: 0.3
     freeze_backbone: false
-    use_pennylane: true # false = classical simulation fallback
+    use_pennylane: true
+
+# ── Quantum Ablation Study Configurations ─────────────────────
+# These configs are for systematic quantum architecture search
+
+quantum_ablation:
+  # Rotation gate ablation
+  rotation_configs:
+    - "ry_only"
+    - "ry_rz"
+    - "u3"
+    - "rx_ry_rz"
+  
+  # Entanglement strategy ablation
+  entanglement_configs:
+    - "cyclic"
+    - "full"
+    - "tree"
+  
+  # Qubit count ablation
+  qubit_configs:
+    - 4
+    - 8
+    - 12
+  
+  # Layer depth ablation
+  layer_configs:
+    - 1
+    - 2
+    - 3
 
 # ── Output ──────────────────────────────────────────────────────
 output:
-  output_dir: "outputs" # Root output directory
+  output_dir: "outputs"
   save_best_model: true
-  save_plots: true # Training curves, ROC, confusion matrix
-  save_csv: true # Per-fold and summary CSVs
+  save_plots: true  # Training curves, ROC, confusion matrix
+  save_csv: true  # Per-fold and summary CSVs
+  save_checkpoints: true  # Save best model per fold
+  wandb_enabled: false  # Enable Weights & Biases tracking (optional)
+  wandb_project: "breast-cancer-transformers"
+
+# ── A100 GPU Optimizations ─────────────────────────────────────
+gpu:
+  use_flash_attention: true  # Enable Flash Attention 2 if available
+  use_tf32: true  # Use TF32 tensor cores on A100
+  benchmark_mode: true  # cudnn.benchmark = True
+  deterministic: false  # Set to true for reproducibility (slower)
