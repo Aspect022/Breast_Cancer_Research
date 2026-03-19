@@ -1,40 +1,65 @@
 #!/bin/bash
+# ═══════════════════════════════════════════════════════════════════
+# BREAST CANCER CLASSIFICATION - SETUP SCRIPT (Linux)
+# ═══════════════════════════════════════════════════════════════════
+# One-time setup: Creates venv and installs requirements
+# ═══════════════════════════════════════════════════════════════════
 
-echo "======================================================="
-echo "Breast Cancer QML vs SNN Baseline - Setup Environment"
-echo "======================================================="
+set -e
 
-echo ""
-echo "[1/3] Creating Python Virtual Environment (.venv)..."
-python3 -m venv .venv
-if [ $? -ne 0 ]; then
-    echo "[Error] Failed to create virtual environment. Ensure Python3 and python3-venv are installed."
+echo "╔══════════════════════════════════════════════════════════════════╗"
+echo "║   BREAST CANCER CLASSIFICATION - SETUP                          ║"
+echo "╚══════════════════════════════════════════════════════════════════╝"
+echo
+
+# Check Python
+echo "[1/4] Checking Python..."
+if ! command -v python3 &> /dev/null; then
+    echo "ERROR: Python3 not found!"
+    echo "Install with: sudo apt update && sudo apt install python3 python3-pip python3-venv"
     exit 1
 fi
+echo "✓ Python found: $(python3 --version)"
 
-echo ""
-echo "[2/3] Activating Virtual Environment and Upgrading PIP..."
+# Create venv
+echo
+echo "[2/4] Creating virtual environment..."
+if [ ! -d ".venv" ]; then
+    python3 -m venv .venv
+    echo "✓ Virtual environment created"
+else
+    echo "✓ Virtual environment already exists"
+fi
+
+# Activate
+echo
+echo "[3/4] Activating virtual environment..."
 source .venv/bin/activate
-pip install --upgrade pip
+echo "✓ Activated"
 
-echo ""
-echo "[3/3] Installing Dependencies from requirements.txt..."
-pip install -r requirements.txt
+# Install requirements
+echo
+echo "[4/4] Installing requirements..."
+echo "This may take 5-10 minutes..."
 
-echo ""
-echo "======================================================="
-echo "Setup Complete!"
-echo "======================================================="
-echo ""
-echo "TO START WORKING:"
-echo "1. Activate the environment by running:"
-echo "   source .venv/bin/activate"
-echo ""
-echo "2. Dataset Setup:"
-echo "   - Download the BreakHis dataset."
-echo "   - Extract it inside the 'data/' folder in this project directory."
-echo "   - (e.g., data/BreaKHis_v1)"
-echo ""
-echo "3. Run the sanity check:"
-echo "   python src/train.py --task binary --data_dir data/BreaKHis_v1 --subset 200 --epochs 3"
-echo "======================================================="
+# Install PyTorch
+echo "Installing PyTorch with CUDA support..."
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 -q
+
+# Install other requirements
+echo "Installing remaining packages..."
+pip install -r requirements.txt -q
+
+echo "✓ All packages installed"
+
+# Summary
+echo
+echo "╔══════════════════════════════════════════════════════════════════╗"
+echo "║   SETUP COMPLETE!                                               ║"
+echo "╠══════════════════════════════════════════════════════════════════╣"
+echo "║  Next steps:                                                     ║"
+echo "║  1. Activate venv: source .venv/bin/activate                     ║"
+echo "║  2. Download datasets: python3 scripts/download_datasets.py      ║"
+echo "║  3. Run pipeline: ./run_full_pipeline.sh                         ║"
+echo "║     or: python3 run_pipeline.py                                  ║"
+echo "╚══════════════════════════════════════════════════════════════════╝"
