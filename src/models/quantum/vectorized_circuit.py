@@ -75,113 +75,101 @@ class VectorizedQuantumGates:
             'Y': torch.tensor([[0, -1j], [1j, 0]], dtype=torch.complex64, device=device),
             'Z': torch.tensor([[1, 0], [0, -1]], dtype=torch.complex64, device=device),
         }
-    
+
     @staticmethod
-    def apply_ry(state: torch.Tensor, angle: torch.Tensor, qubit: int) -> torch.Tensor:
-        """
-        Apply RY gate to specified qubit.
-        
-        Args:
-            state: Quantum state (batch, 2^n_qubits)
-            angle: Rotation angle (batch,)
-            qubit: Qubit index
-        
-        Returns:
-            Updated state (new tensor, not inplace)
-        """
+    def _apply_single_qubit_gate(state: torch.Tensor, gate: torch.Tensor, qubit_idx: int) -> torch.Tensor:
         batch_size = state.shape[0]
         n_qubits = int(math.log2(state.shape[1]))
         
-        # RY matrix elements
+        # Reshape to (batch, 2, 2, ..., 2)
+        shape = [batch_size] + [2] * n_qubits
+        state = state.view(*shape)
+        
+        # Move target qubit axis to position 1
+        dims = list(range(n_qubits + 1))
+        qubit_axis = n_qubits - qubit_idx
+        dims[1], dims[qubit_axis] = dims[qubit_axis], dims[1]
+        state = state.permute(*dims)
+        
+        # (batch, 2, rest)
+        rest_size = (2 ** n_qubits) // 2
+        state = state.reshape(batch_size, 2, rest_size)
+        
+        # Matrix multiply: gate @ state
+        state = torch.bmm(gate, state)
+        
+        # Reshape back
+        shape_after = [batch_size, 2] + [2] * (n_qubits - 1)
+        state = state.view(*shape_after)
+        
+        # Permute back
+        inverse_dims = list(range(n_qubits + 1))
+        inverse_dims[1], inverse_dims[qubit_axis] = inverse_dims[qubit_axis], inverse_dims[1]
+        state = state.permute(*inverse_dims)
+        
+        return state.reshape(batch_size, 2 ** n_qubits)
+    
+    @staticmethod
+    def apply_ry(state: torch.Tensor, angle: torch.Tensor, qubit: int) -> torch.Tensor:
+        """Apply RY gate to specified qubit."""
         cos_half = torch.cos(angle / 2)
         sin_half = torch.sin(angle / 2)
-        
-        # Create new state tensor (avoid inplace operations)
-        new_state = state.clone()
-        
-        for b in range(batch_size):
-            for i in range(2 ** n_qubits):
-                # Check if qubit bit is 0 or 1
-                bit = (i >> qubit) & 1
-                if bit == 0:
-                    # |0⟩ → cos(θ/2)|0⟩ + sin(θ/2)|1⟩
-                    partner_idx = i | (1 << qubit)
-                    if partner_idx < 2 ** n_qubits:
-                        old_i = state[b, i]
-                        old_partner = state[b, partner_idx]
-                        new_state[b, i] = cos_half[b] * old_i - sin_half[b] * old_partner
-                        new_state[b, partner_idx] = sin_half[b] * old_i + cos_half[b] * old_partner
-
-        return new_state
+        gate = torch.stack([
+            torch.stack([cos_half, -sin_half], dim=-1),
+            torch.stack([sin_half, cos_half], dim=-1)
+        ], dim=-2).to(state.dtype).to(state.device)
+        return VectorizedQuantumGates._apply_single_qubit_gate(state, gate, qubit)
     
     @staticmethod
     def apply_rx(state: torch.Tensor, angle: torch.Tensor, qubit: int) -> torch.Tensor:
         """Apply RX gate to specified qubit."""
-        batch_size = state.shape[0]
-        n_qubits = int(math.log2(state.shape[1]))
-        
-        cos_half = torch.cos(angle / 2)
-        isin_half = 1j * torch.sin(angle / 2)
-        
-        # Create new state tensor (avoid inplace operations)
-        new_state = state.clone()
-        
-        for b in range(batch_size):
-            for i in range(2 ** n_qubits):
-                bit = (i >> qubit) & 1
-                if bit == 0:
-                    partner_idx = i | (1 << qubit)
-                    if partner_idx < 2 ** n_qubits:
-                        old_i = state[b, i]
-                        old_partner = state[b, partner_idx]
-                        new_state[b, i] = cos_half[b] * old_i - isin_half[b] * old_partner
-                        new_state[b, partner_idx] = -isin_half[b] * old_i + cos_half[b] * old_partner
-
-        return new_state
+        cos_half = torch.cos(angle / 2).to(torch.complex64)
+        sin_half = -1j * torch.sin(angle / 2)
+        gate = torch.stack([
+            torch.stack([cos_half, sin_half], dim=-1),
+            torch.stack([sin_half, cos_half], dim=-1)
+        ], dim=-2).to(state.device)
+        return VectorizedQuantumGates._apply_single_qubit_gate(state, gate, qubit)
     
     @staticmethod
     def apply_rz(state: torch.Tensor, angle: torch.Tensor, qubit: int) -> torch.Tensor:
         """Apply RZ gate to specified qubit."""
-        batch_size = state.shape[0]
-        
-        exp_pos = torch.exp(-1j * angle / 2)
-        exp_neg = torch.exp(1j * angle / 2)
-        
-        for b in range(batch_size):
-            for i in range(2 ** n_qubits):
-                # Count number of 1 bits up to qubit position
-                # This determines the phase
-                pass  # Simplified - full implementation would be more complex
-        
-        return state
+        phase_pos = torch.exp(-1j * angle / 2)
+        phase_neg = torch.exp(1j * angle / 2)
+        zeros = torch.zeros_like(angle, dtype=torch.complex64)
+        gate = torch.stack([
+            torch.stack([phase_pos, zeros], dim=-1),
+            torch.stack([zeros, phase_neg], dim=-1)
+        ], dim=-2).to(state.device)
+        return VectorizedQuantumGates._apply_single_qubit_gate(state, gate, qubit)
     
     @staticmethod
     def apply_cnot(state: torch.Tensor, control: int, target: int) -> torch.Tensor:
-        """
-        Apply CNOT gate (controlled-X).
-        
-        Args:
-            state: Quantum state (batch, 2^n_qubits)
-            control: Control qubit index
-            target: Target qubit index
-        """
+        """Apply CNOT gate (controlled-X)."""
         batch_size = state.shape[0]
         n_qubits = int(math.log2(state.shape[1]))
         
-        # Create new state tensor (avoid inplace operations)
-        new_state = state.clone()
+        shape = [batch_size] + [2] * n_qubits
+        state = state.view(*shape)
         
-        for b in range(batch_size):
-            for i in range(2 ** n_qubits):
-                # Check if control qubit is |1⟩
-                control_bit = (i >> control) & 1
-                if control_bit == 1:
-                    # Flip target qubit
-                    partner_idx = i ^ (1 << target)
-                    if partner_idx < 2 ** n_qubits:
-                        new_state[b, i], new_state[b, partner_idx] = state[b, partner_idx], state[b, i]
-
-        return new_state
+        control_axis = n_qubits - control
+        target_axis = n_qubits - target
+        
+        idx_c1_t0 = [slice(None)] * (n_qubits + 1)
+        idx_c1_t1 = [slice(None)] * (n_qubits + 1)
+        idx_c1_t0[control_axis] = 1
+        idx_c1_t0[target_axis] = 0
+        idx_c1_t1[control_axis] = 1
+        idx_c1_t1[target_axis] = 1
+        
+        state_c1_t0 = state[tuple(idx_c1_t0)].clone()
+        state_c1_t1 = state[tuple(idx_c1_t1)].clone()
+        
+        state_clone = state.clone()
+        state_clone[tuple(idx_c1_t0)] = state_c1_t1
+        state_clone[tuple(idx_c1_t1)] = state_c1_t0
+        
+        return state_clone.reshape(batch_size, 2 ** n_qubits)
 
 
 # ─────────────────────────────────────────────
@@ -332,23 +320,30 @@ class VectorizedQuantumCircuit(nn.Module):
             Expectation values (batch, n_qubits)
         """
         batch_size = state.shape[0]
-        expectations = []
+        n_qubits = self.n_qubits
         
-        for i in range(self.n_qubits):
-            # ⟨Z⟩ = ⟨ψ|Z_i|ψ⟩
-            exp_z = 0.0
-            
-            for basis_idx in range(self.state_dim):
-                bit = (basis_idx >> i) & 1
-                sign = 1 if bit == 0 else -1
+        # Probabilities of each computational basis state
+        probs = torch.abs(state) ** 2  # (batch, state_dim)
+        
+        # Reshape to (batch, 2, 2, ..., 2)
+        shape = [batch_size] + [2] * n_qubits
+        probs = probs.view(*shape)
+        
+        expectations = []
+        for i in range(n_qubits):
+            # Sum over all axes except the batch (0) and specific qubit (n_qubits - i)
+            qubit_axis = n_qubits - i
+            axes_to_sum = [dim for dim in range(1, n_qubits + 1) if dim != qubit_axis]
+            if axes_to_sum:
+                marginal_probs = torch.sum(probs, dim=axes_to_sum)
+            else:
+                marginal_probs = probs
                 
-                # |⟨basis|ψ⟩|²
-                prob = torch.abs(state[:, basis_idx]) ** 2
-                exp_z = exp_z + sign * prob
-            
+            # Expectation is P(0) - P(1)
+            exp_z = marginal_probs[:, 0] - marginal_probs[:, 1]
             expectations.append(exp_z)
         
-        return torch.stack(expectations, dim=1)  # (batch, n_qubits)
+        return torch.stack(expectations, dim=1)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
