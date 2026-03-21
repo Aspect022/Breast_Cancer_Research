@@ -130,18 +130,27 @@ if ! command -v kaggle &> /dev/null; then
 fi
 print_success "Kaggle CLI found"
 
-# Check Kaggle credentials
-if [ -z "$KAGGLE_USERNAME" ] || [ -z "$KAGGLE_KEY" ]; then
+# Check Kaggle credentials (check both env vars and kaggle.json file)
+KAGGLE_JSON_PATH="$HOME/.kaggle/kaggle.json"
+
+if [ -n "$KAGGLE_USERNAME" ] && [ -n "$KAGGLE_KEY" ]; then
+    print_success "Kaggle credentials found (environment variables)"
+elif [ -f "$KAGGLE_JSON_PATH" ]; then
+    print_success "Kaggle credentials found ($KAGGLE_JSON_PATH)"
+    # Extract username from kaggle.json for display
+    KAGGLE_USERNAME_FROM_FILE=$(grep -o '"username":"[^"]*"' "$KAGGLE_JSON_PATH" | cut -d'"' -f4)
+    echo "  Logged in as: $KAGGLE_USERNAME_FROM_FILE"
+else
     print_error "Kaggle credentials not set!"
     echo ""
     echo "Please set the following environment variables:"
     echo "  export KAGGLE_USERNAME=your_username"
     echo "  export KAGGLE_KEY=your_api_key"
     echo ""
+    echo "Or ensure ~/.kaggle/kaggle.json exists with your credentials."
     echo "Get your API key from: https://www.kaggle.com/account"
     exit 1
 fi
-print_success "Kaggle credentials found"
 
 # Check requirements
 if [ ! -f "requirements.txt" ]; then
