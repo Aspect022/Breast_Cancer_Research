@@ -114,11 +114,14 @@ done
 print_header "🔍 Checking Prerequisites"
 
 # Check Python
-if ! command -v python &> /dev/null; then
-    print_error "Python not found. Please install Python 3.9+"
+if ! command -v python3 &> /dev/null; then
+    print_error "Python 3 not found. Please install Python 3.9+"
     exit 1
 fi
-print_success "Python found: $(python --version)"
+print_success "Python found: $(python3 --version)"
+
+# Use python3 for all commands
+PYTHON_CMD="python3"
 
 # Check Kaggle CLI
 if ! command -v kaggle &> /dev/null; then
@@ -147,7 +150,7 @@ if [ ! -f "requirements.txt" ]; then
 fi
 
 print_success "Installing/verifying requirements..."
-pip install -q -r requirements.txt
+pip3 install -q -r requirements.txt
 
 # ════════════════════════════════════════════════════════════════════════════════
 # Download Dataset
@@ -228,7 +231,7 @@ echo "  Config File: $TEMP_CONFIG"
 print_header "🚀 Running Training Pipeline"
 
 # Build command
-CMD="python run_pipeline.py --config $TEMP_CONFIG"
+CMD="$PYTHON_CMD run_pipeline.py --config $TEMP_CONFIG"
 
 if [ "$MODELS" != "" ]; then
     CMD="$CMD --models $MODELS"
@@ -246,7 +249,7 @@ $CMD
 
 print_header "📊 Generating Comparison Report"
 
-python << 'PYTHON_SCRIPT'
+$PYTHON_CMD << 'PYTHON_SCRIPT'
 import os
 import pandas as pd
 import glob
