@@ -29,7 +29,7 @@ from typing import Optional
 # Add project root to path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from src.data.dataset import get_kfold_splits, set_seed, get_multidataset_dataloaders
+from src.data.dataset import get_kfold_splits, set_seed, get_multidataset_dataloaders, get_multidataset_kfold_splits
 from src.models.efficientnet import get_efficientnet_b3
 from src.models.transformer import (
     get_hybrid_vit, get_vit_tiny,
@@ -608,7 +608,9 @@ def run_model_pipeline(model_name, cfg, all_results, wandb_run=None):
     fold_rows = []
     model_start_time = time.time()
 
-    for fold_idx, train_loader, val_loader, test_loader, nc in get_kfold_splits(
+    # Use unified k-fold loader that supports all datasets
+    for fold_idx, train_loader, val_loader, test_loader, nc in get_multidataset_kfold_splits(
+        dataset_name=data_cfg['dataset'],
         data_dir=data_cfg['data_dir'],
         task=task,
         n_folds=n_folds,
@@ -765,7 +767,7 @@ def main():
     parser.add_argument('--models', nargs='+', default=None,
                         help='Specific models to run (overrides config)')
     parser.add_argument('--dataset', type=str, default=None,
-                        help='Dataset to use: breakhis, wbcd, seer (overrides config)')
+                        help='Dataset to use: breakhis, wbcd, seer, cbis_ddsm (overrides config)')
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -779,6 +781,8 @@ def main():
             cfg['data']['data_dir'] = 'data/SEER'
         elif args.dataset == 'breakhis':
             cfg['data']['data_dir'] = 'data/BreaKHis_v1'
+        elif args.dataset == 'cbis_ddsm':
+            cfg['data']['data_dir'] = cfg['data'].get('cbis_ddsm', {}).get('data_dir', 'data/CBIS-DDSM')
 
     # Updated model order with all new architectures (SNN removed)
     model_order = [

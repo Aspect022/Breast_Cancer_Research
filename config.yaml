@@ -8,12 +8,19 @@
 # ── Dataset ──────────────────────────────────────────────────────
 data:
   # Primary dataset
-  dataset: "breakhis"  # Options: breakhis, wbcd, seer
+  dataset: "breakhis"  # Options: breakhis, wbcd, seer, cbis_ddsm
   data_dir: "data/BreaKHis_v1"  # Path to dataset
   task: "binary"  # "binary" or "multi" (multi-class for BreakHis)
   subset: null  # Set to integer (e.g., 200) for quick tests, null for full
   num_workers: 8  # DataLoader workers (increase for A100)
   seed: 42  # Random seed
+  
+  # CBIS-DDSM specific (for generalization validation)
+  cbis_ddsm:
+    data_dir: "data/CBIS-DDSM"
+    auto_download: true  # Auto-download from Kaggle if not found
+    kaggle_username: null  # Set or use KAGGLE_USERNAME env var
+    kaggle_key: null  # Set or use KAGGLE_KEY env var
 
 # ── Cross-Validation ────────────────────────────────────────────
 cv:
