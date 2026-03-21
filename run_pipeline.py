@@ -29,7 +29,7 @@ from typing import Optional
 # Add project root to path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from src.data.dataset import get_kfold_splits, set_seed, get_multidataset_dataloaders, get_multidataset_kfold_splits
+from src.data.dataset import get_kfold_splits, set_seed, get_multidataset_kfold_splits
 from src.models.efficientnet import get_efficientnet_b3
 from src.models.transformer import (
     get_hybrid_vit, get_vit_tiny,
@@ -45,6 +45,10 @@ from src.models.quantum import (
 from src.models.fusion import (
     get_dual_branch_fusion,
     get_quantum_enhanced_fusion,
+    get_triple_branch_fusion,
+    get_cb_qccf,
+    get_multi_scale_quantum_fusion,
+    get_ensemble_distillation,
 )
 from src.utils.metrics import (
     compute_metrics, print_medical_metrics, get_convergence_epoch,
@@ -255,6 +259,64 @@ def build_model(model_name, num_classes, model_cfg):
             freeze_backbones=model_cfg.get('freeze_backbones', False),
         )
         return model, 'Quantum-Enhanced-Fusion', 'fusion_quantum'
+
+    # New Fusion Models (PROPOSED_ARCHITECTURES.md)
+    elif model_name == 'triple_branch_fusion':
+        model = get_triple_branch_fusion(
+            num_classes=num_classes,
+            swin_variant=model_cfg.get('swin_variant', 'small'),
+            convnext_variant=model_cfg.get('convnext_variant', 'small'),
+            efficientnet_variant=model_cfg.get('efficientnet_variant', 'b3'),
+            dropout=model_cfg.get('dropout', 0.3),
+            fusion_dim=model_cfg.get('fusion_dim', 768),
+            num_heads=model_cfg.get('num_heads', 8),
+            entropy_weight=model_cfg.get('entropy_weight', 0.01),
+            freeze_backbones=model_cfg.get('freeze_backbones', False),
+        )
+        return model, 'TripleBranch-Fusion', 'fusion'
+
+    elif model_name == 'cb_qccf':
+        model = get_cb_qccf(
+            num_classes=num_classes,
+            n_qubits=model_cfg.get('n_qubits', 8),
+            n_layers=model_cfg.get('n_layers', 2),
+            backbone=model_cfg.get('backbone', 'swin_small'),
+            quantum_backbone=model_cfg.get('quantum_backbone', 'resnet18'),
+            rotation_config=model_cfg.get('rotation_config', 'ry_only'),
+            entanglement=model_cfg.get('entanglement', 'cyclic'),
+            dropout=model_cfg.get('dropout', 0.3),
+            specificity_weight=model_cfg.get('specificity_weight', 2.0),
+            freeze_backbones=model_cfg.get('freeze_backbones', False),
+        )
+        return model, 'CB-QCCF', 'fusion_quantum'
+
+    elif model_name == 'multi_scale_quantum_fusion':
+        model = get_multi_scale_quantum_fusion(
+            num_classes=num_classes,
+            backbone=model_cfg.get('backbone', 'resnet34'),
+            n_qubits=model_cfg.get('n_qubits', 8),
+            n_layers=model_cfg.get('n_layers', 2),
+            scale_configs=model_cfg.get('scale_configs', None),
+            dropout=model_cfg.get('dropout', 0.3),
+            freeze_backbone=model_cfg.get('freeze_backbone', False),
+        )
+        return model, 'MSQ-Fusion', 'fusion_quantum'
+
+    elif model_name == 'ensemble_distillation':
+        model = get_ensemble_distillation(
+            num_classes=num_classes,
+            student_model=model_cfg.get('student_model', 'triple_branch_fusion'),
+            teacher_models=model_cfg.get('teacher_models', None),
+            teacher_weights=model_cfg.get('teacher_weights', None),
+            temperature=model_cfg.get('temperature', 4.0),
+            distillation_alpha=model_cfg.get('distillation_alpha', 0.7),
+            freeze_teachers=model_cfg.get('freeze_teachers', True),
+            student_kwargs={
+                'num_classes': num_classes,
+                'dropout': model_cfg.get('dropout', 0.3),
+            },
+        )
+        return model, 'Ensemble-Distillation', 'distillation'
 
     else:
         raise ValueError(f"Unknown model: {model_name}")

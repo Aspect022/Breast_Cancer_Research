@@ -194,11 +194,79 @@ models:
     entropy_weight: 0.01  # Entropy regularization weight
     gate_temperature: 1.0
 
+  # 14. Triple-Branch Cross-Attention Fusion (TBCA-Fusion)
+  # Reference: PROPOSED_ARCHITECTURES.md - Architecture 1
+  triple_branch_fusion:
+    enabled: false  # New architecture - enable for testing
+    batch_size: 12  # Smaller due to three backbones
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    swin_variant: "small"  # Options: tiny, small, v2_small
+    convnext_variant: "small"  # Options: tiny, small, base
+    efficientnet_variant: "b3"  # EfficientNet-B3
+    dropout: 0.3
+    fusion_dim: 768
+    num_heads: 8
+    entropy_weight: 0.01
+
+  # 15. Class-Balanced Quantum-Classical Fusion (CB-QCCF)
+  # Reference: PROPOSED_ARCHITECTURES.md - Architecture 3, QUANTUM_ARCHITECTURES.md
+  cb_qccf:
+    enabled: false  # New architecture - enable for testing
+    batch_size: 16
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: false  # Quantum may not support AMP
+    backbone: "swin_small"  # Options: swin_tiny, swin_small, swin_v2_small
+    quantum_backbone: "resnet18"  # Options: resnet18, resnet34
+    n_qubits: 8
+    n_layers: 2
+    rotation_config: "ry_only"  # Options: ry_only, ry_rz, u3, rx_ry_rz
+    entanglement: "cyclic"  # Options: cyclic, full, tree, none
+    dropout: 0.3
+    specificity_weight: 2.0  # Heavily penalize false positives
+
+  # 16. Multi-Scale Quantum Fusion (MSQF)
+  # Reference: QUANTUM_ARCHITECTURES.md - Architecture 2
+  multi_scale_quantum_fusion:
+    enabled: false  # New architecture - enable for testing
+    batch_size: 16
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: false
+    backbone: "resnet34"  # Options: resnet18, resnet34, resnet50
+    n_qubits: 8
+    n_layers: 2
+    dropout: 0.3
+    # Scale configurations: [(rotation, entanglement), ...] for 3 scales
+    # Default: progressive complexity across scales
+    scale_configs:
+      - ["ry_only", "cyclic"]   # Scale 1: Fine cellular details
+      - ["ry_rz", "cyclic"]     # Scale 2: Medium tissue structures
+      - ["u3", "full"]          # Scale 3: Global architecture
+
+  # 17. Teacher-Student Distillation with Ensemble (TSD-Ensemble)
+  # Reference: PROPOSED_ARCHITECTURES.md - Architecture 5
+  ensemble_distillation:
+    enabled: false  # New architecture - enable for testing
+    batch_size: 16
+    lr: 1.0e-4  # Higher LR since teachers are frozen
+    weight_decay: 1.0e-4
+    use_amp: true
+    student_model: "triple_branch_fusion"  # Options: triple_branch_fusion, cb_qccf, multi_scale_quantum_fusion
+    teacher_models:  # Best performing models as teachers
+      - "swin_small"
+      - "hybrid_vit"
+      - "efficientnet"
+    temperature: 4.0  # Temperature for soft targets
+    distillation_alpha: 0.7  # Weight for hard label loss
+
   # ════════════════════════════════════════════════════════════
   # QUANTUM MODELS (New - Phase 3)
   # ════════════════════════════════════════════════════════════
-  
-  # 14. QENN (Quantum-Enhanced Neural Network) - RY-only
+
+  # 18. QENN (Quantum-Enhanced Neural Network) - RY-only
   qenn_ry:
     enabled: true
     batch_size: 16
@@ -211,7 +279,7 @@ models:
     entanglement: "cyclic"  # CNOT ring
     dropout: 0.3
 
-  # 15. QENN - RY+RZ rotation
+  # 19. QENN (Quantum-Enhanced Neural Network) - RY+RZ rotation
   qenn_ry_rz:
     enabled: true
     batch_size: 16
@@ -224,7 +292,7 @@ models:
     entanglement: "cyclic"
     dropout: 0.3
 
-  # 16. QENN - U3 rotation (full single-qubit)
+  # 20. QENN - U3 rotation (full single-qubit)
   qenn_u3:
     enabled: true
     batch_size: 16
@@ -237,7 +305,7 @@ models:
     entanglement: "cyclic"
     dropout: 0.3
 
-  # 17. QENN - RX+RY+RZ rotation (maximum expressivity)
+  # 21. QENN - RX+RY+RZ rotation (maximum expressivity)
   qenn_rx_ry_rz:
     enabled: true
     batch_size: 16
@@ -250,7 +318,7 @@ models:
     entanglement: "cyclic"
     dropout: 0.3
 
-  # 18. Quantum-Enhanced Fusion (Swin+ConvNeXt+Quantum)
+  # 22. Quantum-Enhanced Fusion (Swin+ConvNeXt+Quantum)
   quantum_enhanced_fusion:
     enabled: true
     batch_size: 16
@@ -266,7 +334,7 @@ models:
     dropout: 0.3
     entropy_weight: 0.01
 
-  # 19. CNN+PQC (PennyLane fallback - legacy)
+  # 23. CNN+PQC (PennyLane fallback - legacy)
   quantum:
     enabled: false  # Disabled - use vectorized quantum instead
     batch_size: 8

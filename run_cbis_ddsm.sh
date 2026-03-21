@@ -181,7 +181,7 @@ else
     
     echo "Extracting dataset..."
     cd "$DATA_DIR"
-    unzip -q cbis-ddsm-breast-cancer-image-dataset.zip
+    unzip -o -q cbis-ddsm-breast-cancer-image-dataset.zip
     rm cbis-ddsm-breast-cancer-image-dataset.zip
     cd - > /dev/null
     
