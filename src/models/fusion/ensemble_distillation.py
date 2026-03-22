@@ -129,34 +129,36 @@ class EnsembleDistillation(nn.Module):
         from .multi_scale_quantum import get_multi_scale_quantum_fusion
         from ..transformer import get_swin_small, get_convnext_small
         from ..fusion import get_dual_branch_fusion
-        
+
         kwargs = kwargs or {}
-        
+        # Filter out num_classes from kwargs to avoid duplicate argument error
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k != 'num_classes'}
+
         student_factory = {
             'triple_branch_fusion': lambda: get_triple_branch_fusion(
-                num_classes=num_classes, **kwargs
+                num_classes=num_classes, **filtered_kwargs
             ),
             'cb_qccf': lambda: get_cb_qccf(
-                num_classes=num_classes, **kwargs
+                num_classes=num_classes, **filtered_kwargs
             ),
             'multi_scale_quantum': lambda: get_multi_scale_quantum_fusion(
-                num_classes=num_classes, **kwargs
+                num_classes=num_classes, **filtered_kwargs
             ),
             'dual_branch_fusion': lambda: get_dual_branch_fusion(
-                num_classes=num_classes, **kwargs
+                num_classes=num_classes, **filtered_kwargs
             ),
             'swin_small': lambda: get_swin_small(
-                num_classes=num_classes, pretrained=True, **kwargs
+                num_classes=num_classes, pretrained=True, **filtered_kwargs
             ),
             'convnext_small': lambda: get_convnext_small(
-                num_classes=num_classes, pretrained=True, **kwargs
+                num_classes=num_classes, pretrained=True, **filtered_kwargs
             ),
         }
-        
+
         if student_name not in student_factory:
             raise ValueError(f"Unknown student_model: {student_name}. "
                            f"Choose from: {list(student_factory.keys())}")
-        
+
         return student_factory[student_name]()
     
     def _build_teacher(self, teacher_name: str, num_classes: int) -> nn.Module:

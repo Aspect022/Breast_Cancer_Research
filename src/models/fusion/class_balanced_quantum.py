@@ -267,32 +267,36 @@ class ClassBalancedQuantumClassicalFusion(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        return_all: bool = False,
+    ) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Forward pass.
-        
+
         Args:
             x: Input images (B, 3, 224, 224).
-            
+            return_all: If True, return (final_pred, sens_pred, spec_pred).
+                       If False, return only final_pred for training.
+
         Returns:
-            final_pred: Combined prediction (B, num_classes)
-            sens_pred: Sensitivity head prediction (B, num_classes)
-            spec_pred: Specificity head prediction (B, num_classes)
+            final_pred: Combined prediction (B, num_classes) when return_all=False
+            (final_pred, sens_pred, spec_pred): All predictions when return_all=True
         """
         # Extract features
         classical_feat, quantum_feat = self.extract_features(x)
-        
+
         # Cross-attention fusion
         fused = self.fuse_features(classical_feat, quantum_feat)
-        
+
         # Dual-head predictions
         sens_pred = self.sensitivity_head(fused)
         spec_pred = self.specificity_head(fused)
-        
+
         # Weighted combination with learnable threshold
         final_pred = sens_pred * self.threshold + spec_pred * (1 - self.threshold)
-        
-        return final_pred, sens_pred, spec_pred
+
+        if return_all:
+            return final_pred, sens_pred, spec_pred
+        return final_pred
     
     def forward_with_threshold(
         self,

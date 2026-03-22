@@ -358,27 +358,28 @@ class MultiScaleQuantumFusion(nn.Module):
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Extract multi-scale features from backbone.
-        
+
         Args:
             x: Input images (B, 3, 224, 224).
-            
+
         Returns:
             (scale1_feat, scale2_feat, scale3_feat)
         """
-        # Scale 1: Fine cellular details (56×56 -> 64 channels)
+        # Scale 1: Fine cellular details
         feat1 = self.conv1(x)
-        feat1 = self.layer1(feat1)  # (B, 64, 56, 56)
-        feat1 = self.scale1_proj(feat1)  # (B, 256)
-        
-        # Scale 2: Medium tissue structures (28×28 -> 128 channels)
-        feat2 = self.layer2(feat1.view(feat1.shape[0], 64, 56, 56))  # (B, 128, 28, 28)
-        feat2 = self.scale2_proj(feat2)  # (B, 256)
-        
-        # Scale 3: Global architecture (14×14 -> 256 channels)
-        feat3 = self.layer3(feat2.view(feat2.shape[0], 128, 28, 28))  # (B, 256, 14, 14)
-        feat3 = self.scale3_proj(feat3)  # (B, 256)
-        
-        return feat1, feat2, feat3
+        feat1 = self.layer1(feat1)  # (B, 64, H1, W1)
+        scale1_feat = self.scale1_proj(feat1)  # (B, 256)
+
+        # Scale 2: Medium tissue structures
+        # Use adaptive pooling to handle dynamic shapes instead of hardcoded view
+        feat2 = self.layer2(feat1)  # (B, 128, H2, W2)
+        scale2_feat = self.scale2_proj(feat2)  # (B, 256)
+
+        # Scale 3: Global architecture
+        feat3 = self.layer3(feat2)  # (B, 256, H3, W3)
+        scale3_feat = self.scale3_proj(feat3)  # (B, 256)
+
+        return scale1_feat, scale2_feat, scale3_feat
     
     def forward(
         self,

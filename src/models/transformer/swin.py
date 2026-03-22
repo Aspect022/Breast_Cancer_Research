@@ -15,7 +15,7 @@ Variants:
 
 import torch
 import torch.nn as nn
-from typing import Optional
+from typing import Optional, Dict
 import timm
 
 
@@ -138,23 +138,101 @@ class SwinTransformerWrapper(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass.
-        
+
         Args:
             x: Input images (B, 3, H, W) where H, W = 224 or 256 depending on variant.
-        
+
         Returns:
             Logits (B, num_classes).
         """
         # Extract features using Swin backbone
         features = self.backbone(x)  # (B, feature_dim)
-        
+
         # Classification
         logits = self.classifier(features)
         return logits
-    
+
     def get_features(self, x: torch.Tensor) -> torch.Tensor:
         """Extract feature vector for fusion."""
         return self.backbone(x)
+
+    def get_recommended_lr(self) -> float:
+        """
+        Get recommended learning rate based on variant.
+        
+        V2 variants require lower learning rates due to post-norm architecture
+        and improved training stability mechanisms.
+        
+        Returns:
+            Recommended learning rate.
+        """
+        if 'v2' in self.variant.lower():
+            return 1e-5  # Lower LR for V2 stability
+        return 2e-5  # Standard LR for V1 variants
+
+    def clip_gradients(self, max_norm: float = 1.0) -> float:
+        """
+        Clip gradients to prevent exploding gradients during training.
+        
+        V2 variants are particularly sensitive to gradient explosions
+        due to their deeper architecture and post-norm design.
+        
+        Args:
+            max_norm: Maximum gradient norm (default: 1.0).
+            
+        Returns:
+            Total norm of gradients before clipping.
+        """
+        total_norm = 0.0
+        for p in self.parameters():
+            if p.grad is not None and p.requires_grad:
+                param_norm = p.grad.data.norm(2)
+                total_norm += param_norm.item() ** 2
+        total_norm = total_norm ** 0.5
+        
+        if total_norm > max_norm:
+            for p in self.parameters():
+                if p.grad is not None and p.requires_grad:
+                    p.grad.data.mul_(max_norm / total_norm)
+        
+        return total_norm
+
+    def check_layer_norm_health(self, x: torch.Tensor, eps: float = 1e-5) -> Dict[str, float]:
+        """
+        Check layer normalization health for debugging training instability.
+        
+        V2 variants use post-norm architecture which can be sensitive to
+        input distribution shifts. This method helps diagnose issues.
+        
+        Args:
+            x: Sample input tensor.
+            eps: Small constant for numerical stability.
+            
+        Returns:
+            Dictionary with layer norm statistics.
+        """
+        self.eval()
+        stats = {}
+        
+        with torch.no_grad():
+            # Check input statistics
+            stats['input_mean'] = x.mean().item()
+            stats['input_std'] = x.std().item()
+            
+            # Check classifier layer norm
+            if isinstance(self.classifier[0], nn.LayerNorm):
+                ln = self.classifier[0]
+                stats['ln_weight_mean'] = ln.weight.mean().item()
+                stats['ln_weight_std'] = ln.weight.std().item()
+                stats['ln_bias_mean'] = ln.bias.mean().item() if ln.bias is not None else 0.0
+                
+                # Test forward through layer norm
+                features = self.backbone(x)
+                ln_out = ln(features)
+                stats['ln_output_mean'] = ln_out.mean().item()
+                stats['ln_output_std'] = ln_out.std().item()
+        
+        return stats
     
     def get_attention_weights(self, x: torch.Tensor, layer_idx: int = -1) -> torch.Tensor:
         """
