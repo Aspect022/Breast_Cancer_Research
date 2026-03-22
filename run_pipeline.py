@@ -873,6 +873,11 @@ def main():
         'qenn_u3',
         'qenn_rx_ry_rz',
         'quantum_enhanced_fusion',
+        
+        # NEW: Advanced fusion architectures (March 2026)
+        'cb_qccf',
+        'multi_scale_quantum_fusion',
+        'ensemble_distillation',
     ]
 
     if args.models:

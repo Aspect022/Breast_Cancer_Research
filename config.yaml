@@ -213,7 +213,7 @@ models:
   # 15. Class-Balanced Quantum-Classical Fusion (CB-QCCF)
   # Reference: PROPOSED_ARCHITECTURES.md - Architecture 3, QUANTUM_ARCHITECTURES.md
   cb_qccf:
-    enabled: false  # New architecture - enable for testing
+    enabled: true  # ENABLED for training
     batch_size: 16
     lr: 2.0e-5
     weight_decay: 1.0e-4
@@ -230,7 +230,7 @@ models:
   # 16. Multi-Scale Quantum Fusion (MSQF)
   # Reference: QUANTUM_ARCHITECTURES.md - Architecture 2
   multi_scale_quantum_fusion:
-    enabled: false  # New architecture - enable for testing
+    enabled: true  # ENABLED for training
     batch_size: 16
     lr: 2.0e-5
     weight_decay: 1.0e-4
@@ -249,7 +249,7 @@ models:
   # 17. Teacher-Student Distillation with Ensemble (TSD-Ensemble)
   # Reference: PROPOSED_ARCHITECTURES.md - Architecture 5
   ensemble_distillation:
-    enabled: false  # New architecture - enable for testing
+    enabled: true  # ENABLED for training
     batch_size: 16
     lr: 1.0e-4  # Higher LR since teachers are frozen
     weight_decay: 1.0e-4
