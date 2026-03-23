@@ -197,14 +197,14 @@ models:
   # 14. Triple-Branch Cross-Attention Fusion (TBCA-Fusion)
   # Reference: PROPOSED_ARCHITECTURES.md - Architecture 1
   triple_branch_fusion:
-    enabled: false  # New architecture - enable for testing
-    batch_size: 12  # Smaller due to three backbones
-    lr: 2.0e-5
+    enabled: true  # ENABLED for training with B5
+    batch_size: 10  # Reduced for B5 (uses more memory)
+    lr: 1.0e-5  # Lower LR for B5
     weight_decay: 1.0e-4
     use_amp: true
     swin_variant: "small"  # Options: tiny, small, v2_small
     convnext_variant: "small"  # Options: tiny, small, base
-    efficientnet_variant: "b3"  # EfficientNet-B3
+    efficientnet_variant: "b5"  # ⭐ UPGRADED TO B5
     dropout: 0.3
     fusion_dim: 768
     num_heads: 8

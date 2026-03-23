@@ -285,21 +285,24 @@ class TripleBranchCrossAttention(nn.Module):
             self.convnext_branch.classifier = nn.Identity()
         
         convnext_dim = self.convnext_branch.backbone.num_features
-        
+
         # ── Branch 3: EfficientNet (Multi-scale Features) ───────────
-        from ..efficientnet import get_efficientnet_b3
-        
-        # For now, use EfficientNet-B3 (can be extended to other variants)
-        self.efficientnet_branch = get_efficientnet_b3(num_classes=num_classes)
-        
+        from ..efficientnet import get_efficientnet_b3, get_efficientnet_b5
+
+        # Support both B3 and B5 variants
+        if efficientnet_variant == 'b5':
+            self.efficientnet_branch = get_efficientnet_b5(num_classes=num_classes)
+            effnet_dim = 2048  # EfficientNet-B5 feature dimension
+        else:
+            self.efficientnet_branch = get_efficientnet_b3(num_classes=num_classes)
+            effnet_dim = 1536  # EfficientNet-B3 feature dimension
+
         # Freeze if requested
         if freeze_backbones:
             for param in self.efficientnet_branch.features.parameters():
                 param.requires_grad = False
-        
+
         # EfficientNet uses .features for backbone
-        effnet_dim = 1536  # EfficientNet-B3 feature dimension
-        
         # Store backbone reference
         self.efficientnet_backbone = self.efficientnet_branch.features
         
