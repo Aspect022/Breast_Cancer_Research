@@ -39,6 +39,13 @@ from .class_balanced_quantum import (
     get_cb_qccf,
 )
 
+from .cb_qccf_variants import (
+    ClassBalancedQuantumClassicalFusion as CB_QCCF_Base,
+    get_cb_qccf_original,
+    get_cb_qccf_convnet_efficient,
+    get_cb_qccf_swin_convnet,
+)
+
 from .multi_scale_quantum import (
     MultiScaleQuantumFusion,
     ScaleQuantumModule,

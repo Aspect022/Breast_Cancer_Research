@@ -330,6 +330,33 @@ def build_model(model_name, num_classes, model_cfg):
             freeze_backbones=model_cfg.get('freeze_backbones', False),
         )
         return model, 'CB-QCCF', 'fusion_quantum'
+    
+    # CB-QCCF Variants
+    elif model_name == 'cb_qccf_convnet_efficient':
+        model = get_cb_qccf_convnet_efficient(
+            num_classes=num_classes,
+            n_qubits=model_cfg.get('n_qubits', 8),
+            n_layers=model_cfg.get('n_layers', 2),
+            rotation_config=model_cfg.get('rotation_config', 'ry_only'),
+            entanglement=model_cfg.get('entanglement', 'cyclic'),
+            dropout=model_cfg.get('dropout', 0.3),
+            specificity_weight=model_cfg.get('specificity_weight', 2.0),
+            freeze_backbones=model_cfg.get('freeze_backbones', False),
+        )
+        return model, 'CB-QCCF-ConvEff', 'fusion_quantum'
+    
+    elif model_name == 'cb_qccf_swin_convnet':
+        model = get_cb_qccf_swin_convnet(
+            num_classes=num_classes,
+            n_qubits=model_cfg.get('n_qubits', 8),
+            n_layers=model_cfg.get('n_layers', 2),
+            rotation_config=model_cfg.get('rotation_config', 'ry_only'),
+            entanglement=model_cfg.get('entanglement', 'cyclic'),
+            dropout=model_cfg.get('dropout', 0.3),
+            specificity_weight=model_cfg.get('specificity_weight', 2.0),
+            freeze_backbones=model_cfg.get('freeze_backbones', False),
+        )
+        return model, 'CB-QCCF-SwinConv', 'fusion_quantum'
 
     elif model_name == 'multi_scale_quantum_fusion':
         model = get_multi_scale_quantum_fusion(

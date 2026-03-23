@@ -265,6 +265,38 @@ models:
     dropout: 0.3
     specificity_weight: 2.0  # Heavily penalize false positives
 
+  # 15b. CB-QCCF Variant 1: ConvNeXt + EfficientNet-B5 + Quantum
+  cb_qccf_convnet_efficient:
+    enabled: false  # Enable for testing
+    batch_size: 14  # Slightly smaller (ConvNeXt + B5)
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: false
+    classical_backbone: "convnext_small"
+    quantum_backbone: "efficientnet_b5"
+    n_qubits: 8
+    n_layers: 2
+    rotation_config: "ry_only"
+    entanglement: "cyclic"
+    dropout: 0.3
+    specificity_weight: 2.0
+
+  # 15c. CB-QCCF Variant 2: Swin + ConvNeXt + Quantum
+  cb_qccf_swin_convnet:
+    enabled: false  # Enable for testing
+    batch_size: 16
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: false
+    classical_backbone: "swin_small"
+    quantum_backbone: "convnext_small"
+    n_qubits: 8
+    n_layers: 2
+    rotation_config: "ry_only"
+    entanglement: "cyclic"
+    dropout: 0.3
+    specificity_weight: 2.0
+
   # 16. Multi-Scale Quantum Fusion (MSQF)
   # Reference: QUANTUM_ARCHITECTURES.md - Architecture 2
   multi_scale_quantum_fusion:
