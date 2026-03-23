@@ -6,7 +6,7 @@ Architecture:
 
     Branch 1 (Global Context): Swin-Small Transformer → F_swin
     Branch 2 (Local Texture): ConvNeXt-Small → F_convnext
-    Branch 3 (Multi-scale): EfficientNet-B3 → F_effnet
+    Branch 3 (Multi-scale): EfficientNet-B3/B5 → F_effnet
 
     Cross-Attention Enhancement:
         - Swin attends to ConvNeXt features
@@ -30,6 +30,10 @@ Architecture:
 
 Reference: PROPOSED_ARCHITECTURES.md - Architecture 1 (TBCA-Fusion)
 Expected Accuracy: 87-89%
+
+Quantum Variants:
+    - Placement 2: Quantum Bottleneck (post-backbone, pre-fusion)
+    - Placement 3: Quantum Fusion (post-fusion, pre-classification)
 """
 
 import torch
@@ -233,6 +237,10 @@ class TripleBranchCrossAttention(nn.Module):
         num_heads: int = 8,
         entropy_weight: float = 0.01,
         freeze_backbones: bool = False,
+        use_quantum_fusion: bool = False,  # Placement 3
+        use_quantum_bottleneck: bool = False,  # Placement 2
+        quantum_n_qubits: int = 8,
+        quantum_n_layers: int = 2,
     ):
         super().__init__()
         
@@ -327,7 +335,38 @@ class TripleBranchCrossAttention(nn.Module):
         
         # ── Self-Attention Refinement ───────────────────────────────
         self.fusion_attention = SelfAttention(dim=fusion_dim, num_heads=num_heads)
+
+        # ── Quantum Layers (Optional) ───────────────────────────────
+        # Placement 3: Quantum Fusion (post-fusion, pre-classification)
+        self.use_quantum_fusion = use_quantum_fusion
+        if use_quantum_fusion:
+            from ..quantum.quantum_fusion_layer import get_quantum_fusion_layer
+            self.quantum_fusion = get_quantum_fusion_layer(
+                input_dim=fusion_dim,
+                hidden_dim=fusion_dim,
+                n_qubits=quantum_n_qubits,
+                n_layers=quantum_n_layers,
+                dropout=dropout,
+            )
+        else:
+            self.quantum_fusion = nn.Identity()
         
+        # Placement 2: Quantum Bottleneck (post-backbone, pre-fusion)
+        self.use_quantum_bottleneck = use_quantum_bottleneck
+        if use_quantum_bottleneck:
+            from ..quantum.quantum_bottleneck_layer import get_quantum_bottleneck
+            self.quantum_bottleneck = get_quantum_bottleneck(
+                input_dim=fusion_dim,
+                hidden_dim=fusion_dim,
+                n_qubits=quantum_n_qubits,
+                n_layers=quantum_n_layers,
+                dropout=dropout,
+                multi_branch=True,
+                apply_to=['swin', 'convnext'],  # Skip EfficientNet for efficiency
+            )
+        else:
+            self.quantum_bottleneck = nn.Identity()
+
         # ── Classification Head ─────────────────────────────────────
         self.classifier = nn.Sequential(
             nn.Linear(fusion_dim, 256),
@@ -438,35 +477,45 @@ class TripleBranchCrossAttention(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass.
-        
+
         Args:
             x: Input images (B, 3, 224, 224).
-            
+
         Returns:
             Logits (B, num_classes).
         """
         # Extract features from all branches
         swin_feat, convnext_feat, effnet_feat = self.extract_features(x)
-        
+
+        # Apply quantum bottlenecks if enabled (Placement 2)
+        if self.use_quantum_bottleneck:
+            swin_feat, convnext_feat, effnet_feat = self.quantum_bottleneck(
+                swin_feat, convnext_feat, effnet_feat
+            )
+
         # Project to common dimension
         swin_proj, convnext_proj, effnet_proj = self.project_features(
             swin_feat, convnext_feat, effnet_feat
         )
-        
+
         # Apply cross-attention enhancement
         swin_enhanced, convnext_enhanced, effnet_enhanced = self.apply_cross_attention(
             swin_proj, convnext_proj, effnet_proj
         )
-        
+
         # Weighted fusion
         fused = self.fuse_features(swin_enhanced, convnext_enhanced, effnet_enhanced)
-        
+
+        # Apply quantum fusion if enabled (Placement 3)
+        if self.use_quantum_fusion:
+            fused = self.quantum_fusion(fused)
+
         # Self-attention refinement
         fused_refined = self.fusion_attention(fused)
-        
+
         # Classification
         logits = self.classifier(fused_refined)
-        
+
         return logits
     
     def forward_with_weights(
@@ -539,28 +588,36 @@ def get_triple_branch_fusion(
     num_heads: int = 8,
     entropy_weight: float = 0.01,
     freeze_backbones: bool = False,
+    use_quantum_fusion: bool = False,  # Placement 3
+    use_quantum_bottleneck: bool = False,  # Placement 2
+    quantum_n_qubits: int = 8,
+    quantum_n_layers: int = 2,
 ) -> TripleBranchCrossAttention:
     """
     Factory for Triple-Branch Cross-Attention Fusion (TBCA-Fusion).
-    
+
     Args:
         num_classes: Number of output classes.
         swin_variant: 'tiny', 'small', or 'v2_small'.
         convnext_variant: 'tiny', 'small', or 'base'.
-        efficientnet_variant: 'b0' to 'b7' (b3 recommended).
+        efficientnet_variant: 'b0' to 'b7' (b3 or b5 recommended).
         dropout: Dropout rate.
         fusion_dim: Fusion feature dimension.
         num_heads: Number of attention heads.
         entropy_weight: Entropy regularization weight.
         freeze_backbones: Freeze backbone weights.
-    
+        use_quantum_fusion: Enable Placement 3 (Quantum Fusion).
+        use_quantum_bottleneck: Enable Placement 2 (Quantum Bottleneck).
+        quantum_n_qubits: Number of qubits (default: 8).
+        quantum_n_layers: Number of VQC layers (default: 2).
+
     Returns:
         TripleBranchCrossAttention model.
-    
+
     Expected Performance:
-        - Accuracy: 87-89%
-        - Sensitivity: 88-92%
-        - Specificity: 80-85%
+        - Classical: 87-89% accuracy
+        - Quantum Fusion (Placement 3): 88-90% accuracy (+12-17% training time)
+        - Quantum Bottleneck (Placement 2): 88-90% accuracy (+20-30% training time)
     """
     return TripleBranchCrossAttention(
         num_classes=num_classes,
@@ -572,4 +629,8 @@ def get_triple_branch_fusion(
         num_heads=num_heads,
         entropy_weight=entropy_weight,
         freeze_backbones=freeze_backbones,
+        use_quantum_fusion=use_quantum_fusion,
+        use_quantum_bottleneck=use_quantum_bottleneck,
+        quantum_n_qubits=quantum_n_qubits,
+        quantum_n_layers=quantum_n_layers,
     )

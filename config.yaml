@@ -210,6 +210,44 @@ models:
     num_heads: 8
     entropy_weight: 0.01
 
+  # 14b. TBCA-Fusion with Quantum Fusion (Placement 3) ⭐
+  triple_branch_fusion_quantum:
+    enabled: false  # Enable for quantum fusion testing
+    batch_size: 10
+    lr: 1.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    swin_variant: "small"
+    convnext_variant: "small"
+    efficientnet_variant: "b5"
+    dropout: 0.3
+    fusion_dim: 768
+    num_heads: 8
+    entropy_weight: 0.01
+    use_quantum_fusion: true  # ⭐ Placement 3
+    use_quantum_bottleneck: false
+    quantum_n_qubits: 8
+    quantum_n_layers: 2
+
+  # 14c. TBCA-Fusion with Quantum Bottleneck (Placement 2)
+  triple_branch_fusion_bottleneck:
+    enabled: false  # Enable for quantum bottleneck testing
+    batch_size: 10
+    lr: 1.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    swin_variant: "small"
+    convnext_variant: "small"
+    efficientnet_variant: "b5"
+    dropout: 0.3
+    fusion_dim: 768
+    num_heads: 8
+    entropy_weight: 0.01
+    use_quantum_fusion: false
+    use_quantum_bottleneck: true  # ⭐ Placement 2
+    quantum_n_qubits: 8
+    quantum_n_layers: 2
+
   # 15. Class-Balanced Quantum-Classical Fusion (CB-QCCF)
   # Reference: PROPOSED_ARCHITECTURES.md - Architecture 3, QUANTUM_ARCHITECTURES.md
   cb_qccf:

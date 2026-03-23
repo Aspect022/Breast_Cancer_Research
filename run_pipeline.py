@@ -272,8 +272,49 @@ def build_model(model_name, num_classes, model_cfg):
             num_heads=model_cfg.get('num_heads', 8),
             entropy_weight=model_cfg.get('entropy_weight', 0.01),
             freeze_backbones=model_cfg.get('freeze_backbones', False),
+            use_quantum_fusion=model_cfg.get('use_quantum_fusion', False),
+            use_quantum_bottleneck=model_cfg.get('use_quantum_bottleneck', False),
+            quantum_n_qubits=model_cfg.get('quantum_n_qubits', 8),
+            quantum_n_layers=model_cfg.get('quantum_n_layers', 2),
         )
         return model, 'TripleBranch-Fusion', 'fusion'
+    
+    # Quantum Variants of TBCA-Fusion
+    elif model_name == 'triple_branch_fusion_quantum':
+        model = get_triple_branch_fusion(
+            num_classes=num_classes,
+            swin_variant=model_cfg.get('swin_variant', 'small'),
+            convnext_variant=model_cfg.get('convnext_variant', 'small'),
+            efficientnet_variant=model_cfg.get('efficientnet_variant', 'b5'),
+            dropout=model_cfg.get('dropout', 0.3),
+            fusion_dim=model_cfg.get('fusion_dim', 768),
+            num_heads=model_cfg.get('num_heads', 8),
+            entropy_weight=model_cfg.get('entropy_weight', 0.01),
+            freeze_backbones=model_cfg.get('freeze_backbones', False),
+            use_quantum_fusion=True,  # ⭐ Placement 3
+            use_quantum_bottleneck=False,
+            quantum_n_qubits=model_cfg.get('quantum_n_qubits', 8),
+            quantum_n_layers=model_cfg.get('quantum_n_layers', 2),
+        )
+        return model, 'TBCA-Quantum-Fusion', 'fusion_quantum'
+    
+    elif model_name == 'triple_branch_fusion_bottleneck':
+        model = get_triple_branch_fusion(
+            num_classes=num_classes,
+            swin_variant=model_cfg.get('swin_variant', 'small'),
+            convnext_variant=model_cfg.get('convnext_variant', 'small'),
+            efficientnet_variant=model_cfg.get('efficientnet_variant', 'b5'),
+            dropout=model_cfg.get('dropout', 0.3),
+            fusion_dim=model_cfg.get('fusion_dim', 768),
+            num_heads=model_cfg.get('num_heads', 8),
+            entropy_weight=model_cfg.get('entropy_weight', 0.01),
+            freeze_backbones=model_cfg.get('freeze_backbones', False),
+            use_quantum_fusion=False,
+            use_quantum_bottleneck=True,  # ⭐ Placement 2
+            quantum_n_qubits=model_cfg.get('quantum_n_qubits', 8),
+            quantum_n_layers=model_cfg.get('quantum_n_layers', 2),
+        )
+        return model, 'TBCA-Quantum-Bottleneck', 'fusion_quantum'
 
     elif model_name == 'cb_qccf':
         model = get_cb_qccf(
