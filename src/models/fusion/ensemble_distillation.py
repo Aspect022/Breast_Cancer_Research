@@ -165,9 +165,9 @@ class EnsembleDistillation(nn.Module):
         """Build teacher model."""
         from ..transformer import get_swin_small, get_swin_tiny, get_convnext_small
         from ..transformer.hybrid_vit import get_hybrid_vit
-        from ..efficientnet import get_efficientnet
+        from ..efficientnet import get_efficientnet_b3
         from ..fusion import get_dual_branch_fusion
-        
+
         teacher_factory = {
             'swin_small': lambda: get_swin_small(
                 num_classes=num_classes, pretrained=True, dropout=0.3
@@ -179,8 +179,8 @@ class EnsembleDistillation(nn.Module):
                 num_classes=num_classes, d_model=256, num_heads=4,
                 num_layers=2, dropout=0.1, freeze_backbone=False
             ),
-            'efficientnet_b3': lambda: get_efficientnet(
-                num_classes=num_classes, variant='b3', pretrained=True, dropout=0.3
+            'efficientnet_b3': lambda: get_efficientnet_b3(
+                num_classes=num_classes
             ),
             'dual_branch_fusion': lambda: get_dual_branch_fusion(
                 num_classes=num_classes, swin_variant='small',

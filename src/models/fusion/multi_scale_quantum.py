@@ -384,35 +384,40 @@ class MultiScaleQuantumFusion(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
+        return_all: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass.
-        
+
         Args:
             x: Input images (B, 3, 224, 224).
-            
+            return_all: If True, return (logits, attention_weights).
+                       If False, return only logits for training.
+
         Returns:
             logits: Predictions (B, num_classes)
-            attention_weights: Scale attention weights (B, 3, 3)
+            attention_weights: Scale attention weights (B, 3, 3) [only if return_all=True]
         """
         # Extract multi-scale features
         feat1, feat2, feat3 = self.extract_multi_scale_features(x)
-        
+
         # Process through scale quantum modules
         quantum1 = self.scale1_quantum(feat1)
         quantum2 = self.scale2_quantum(feat2)
         quantum3 = self.scale3_quantum(feat3)
-        
+
         # Attention-based fusion
         fused, attn_weights = self.attention_fusion(quantum1, quantum2, quantum3)
-        
+
         # Classical refinement
         refined = self.refinement(fused)
-        
+
         # Classification
         logits = self.classifier(refined)
-        
-        return logits, attn_weights
+
+        if return_all:
+            return logits, attn_weights
+        return logits
     
     def get_scale_importance(self, x: torch.Tensor) -> Dict[str, float]:
         """
