@@ -212,7 +212,7 @@ models:
 
   # 14b. TBCA-Fusion with Quantum Fusion (Placement 3) ⭐
   triple_branch_fusion_quantum:
-    enabled: false  # Enable for quantum fusion testing
+    enabled: true  # ⭐ ENABLED for quantum fusion testing
     batch_size: 10
     lr: 1.0e-5
     weight_decay: 1.0e-4
@@ -231,7 +231,7 @@ models:
 
   # 14c. TBCA-Fusion with Quantum Bottleneck (Placement 2)
   triple_branch_fusion_bottleneck:
-    enabled: false  # Enable for quantum bottleneck testing
+    enabled: true  # ⭐ ENABLED for quantum bottleneck testing
     batch_size: 10
     lr: 1.0e-5
     weight_decay: 1.0e-4
@@ -267,7 +267,7 @@ models:
 
   # 15b. CB-QCCF Variant 1: ConvNeXt + EfficientNet-B5 + Quantum
   cb_qccf_convnet_efficient:
-    enabled: false  # Enable for testing
+    enabled: true  # ⭐ ENABLED for testing
     batch_size: 14  # Slightly smaller (ConvNeXt + B5)
     lr: 2.0e-5
     weight_decay: 1.0e-4
@@ -283,7 +283,7 @@ models:
 
   # 15c. CB-QCCF Variant 2: Swin + ConvNeXt + Quantum
   cb_qccf_swin_convnet:
-    enabled: false  # Enable for testing
+    enabled: true  # ⭐ ENABLED for testing
     batch_size: 16
     lr: 2.0e-5
     weight_decay: 1.0e-4
