@@ -944,8 +944,15 @@ def main():
         
         # NEW: Advanced fusion architectures (March 2026)
         'cb_qccf',
+        'cb_qccf_convnet_efficient',
+        'cb_qccf_swin_convnet',
         'multi_scale_quantum_fusion',
         'ensemble_distillation',
+        
+        # TBCA-Fusion variants with EfficientNet-B5
+        'triple_branch_fusion',
+        'triple_branch_fusion_quantum',
+        'triple_branch_fusion_bottleneck',
     ]
 
     if args.models:
