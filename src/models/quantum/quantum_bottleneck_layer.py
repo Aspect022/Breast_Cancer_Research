@@ -143,6 +143,9 @@ class QuantumBottleneckLayer(nn.Module):
         
         quantum_out = torch.stack(quantum_outputs)  # (B, 8)
         
+        # Ensure same dtype as input (fixes AMP/half-precision issues)
+        quantum_out = quantum_out.to(x.dtype)
+        
         # Classical expansion
         expanded = self.classical_expand(quantum_out)  # (B, 768)
         
