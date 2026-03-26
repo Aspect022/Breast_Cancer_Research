@@ -18,6 +18,7 @@ RESEARCH-BACKED DESIGN (March 2026):
 
 import torch
 import torch.nn as nn
+import math
 from typing import Optional
 from .vectorized_circuit import VectorizedQuantumCircuit
 
@@ -87,6 +88,10 @@ class QuantumFusionLayer(nn.Module):
         # Layer norm for stability (residual connection)
         self.layer_norm = nn.LayerNorm(hidden_dim)
         
+        # 🔴 CRITICAL FIX: Normalize quantum output for classical layers
+        # Quantum circuit outputs [-1, 1], classical layers expect normalized input
+        self.quantum_norm = nn.LayerNorm(n_qubits)
+        
         # Initialize quantum circuit weights
         self._init_quantum_weights()
     
@@ -110,10 +115,18 @@ class QuantumFusionLayer(nn.Module):
         # Classical compression to qubit dimensions
         compressed = self.classical_compress(x)  # (B, 8)
         
+        # 🔴 CRITICAL FIX: Normalize to [-π, π] for stable angle encoding
+        # Without this, RY gates get unbounded angles → quantum circuit becomes NOISE
+        # This fixes AUC = 0.0000 (model predicting only one class)
+        compressed = torch.tanh(compressed) * math.pi
+        
         # ⚠️ CRITICAL FIX: VectorizedQuantumCircuit is fully batched
         # Processes all B samples in parallel on GPU
         # Time: ~0.1ms vs 100ms for PennyLane (1000× speedup)
-        quantum_out = self.quantum_circuit(compressed)  # (B, 8)
+        quantum_out = self.quantum_circuit(compressed)  # (B, 8), range [-1, 1]
+        
+        # 🔴 CRITICAL FIX: Normalize quantum output for classical layers
+        quantum_out = self.quantum_norm(quantum_out)
         
         # Classical expansion back to original dimension
         expanded = self.classical_expand(quantum_out)  # (B, 768)
