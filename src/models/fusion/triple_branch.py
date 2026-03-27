@@ -39,6 +39,7 @@ Quantum Variants:
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
 from typing import Optional, Tuple, Dict, List
 from .gating import entropy_regularization
 
@@ -207,6 +208,63 @@ class SelfAttention(nn.Module):
         return out
 
 
+class FeatureMapQuantumEmbedding(nn.Module):
+    """
+    Local GPU quantum embedding for CNN feature maps or ViT token maps.
+    """
+
+    def __init__(
+        self,
+        input_dim: int,
+        output_dim: int,
+        n_qubits: int = 8,
+        n_layers: int = 2,
+        rotation_config: str = 'ry_only',
+        entanglement: str = 'cyclic',
+        dropout: float = 0.3,
+    ):
+        super().__init__()
+
+        from ..quantum.vectorized_circuit import VectorizedQuantumCircuit
+
+        self.compress = nn.Sequential(
+            nn.Linear(input_dim, 256),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(256, n_qubits),
+        )
+        self.quantum = VectorizedQuantumCircuit(
+            n_qubits=n_qubits,
+            n_layers=n_layers,
+            rotation_config=rotation_config,
+            entanglement=entanglement,
+        )
+        self.quantum_norm = nn.LayerNorm(n_qubits)
+        self.expand = nn.Sequential(
+            nn.Linear(n_qubits, 256),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(256, output_dim),
+        )
+        self.output_norm = nn.LayerNorm(output_dim)
+
+    def _pool_input(self, x: torch.Tensor) -> torch.Tensor:
+        if x.ndim == 4:
+            return F.adaptive_avg_pool2d(x, (1, 1)).flatten(1)
+        if x.ndim == 3:
+            return x.mean(dim=1)
+        return x
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        pooled = self._pool_input(x)
+        compressed = self.compress(pooled)
+        compressed = torch.tanh(compressed) * math.pi
+        quantum_out = self.quantum(compressed)
+        quantum_out = self.quantum_norm(quantum_out).to(pooled.dtype)
+        expanded = self.expand(quantum_out)
+        return self.output_norm(expanded)
+
+
 class TripleBranchCrossAttention(nn.Module):
     """
     Triple-Branch Cross-Attention Fusion (TBCA-Fusion).
@@ -241,6 +299,12 @@ class TripleBranchCrossAttention(nn.Module):
         use_quantum_bottleneck: bool = False,  # Placement 2
         quantum_n_qubits: int = 8,
         quantum_n_layers: int = 2,
+        quantum_rotation_config: str = 'ry_only',
+        quantum_entanglement: str = 'cyclic',
+        quantum_feature_map_mode: Optional[str] = None,
+        vit_d_model: int = 256,
+        vit_num_heads: int = 4,
+        vit_num_layers: int = 2,
     ):
         super().__init__()
         
@@ -250,6 +314,7 @@ class TripleBranchCrossAttention(nn.Module):
         self.efficientnet_variant = efficientnet_variant
         self.entropy_weight = entropy_weight
         self.fusion_dim = fusion_dim
+        self.quantum_feature_map_mode = quantum_feature_map_mode
         
         # ── Branch 1: Swin Transformer (Global Context) ─────────────
         from ..transformer import get_swin_tiny, get_swin_small, get_swin_v2_small
@@ -295,24 +360,60 @@ class TripleBranchCrossAttention(nn.Module):
         convnext_dim = self.convnext_branch.backbone.num_features
 
         # ── Branch 3: EfficientNet (Multi-scale Features) ───────────
-        from ..efficientnet import get_efficientnet_b3, get_efficientnet_b5
+        self.third_branch_name = 'efficientnet'
+        self.vit_branch = None
+        self.feature_map_quantum = None
 
-        # Support both B3 and B5 variants
-        if efficientnet_variant == 'b5':
-            self.efficientnet_branch = get_efficientnet_b5(num_classes=num_classes)
-            effnet_dim = 2048  # EfficientNet-B5 feature dimension
+        if quantum_feature_map_mode == 'vit':
+            from ..transformer import get_hybrid_vit
+
+            self.vit_branch = get_hybrid_vit(
+                num_classes=num_classes,
+                d_model=vit_d_model,
+                num_heads=vit_num_heads,
+                num_layers=vit_num_layers,
+                dropout=dropout,
+                freeze_backbone=freeze_backbones,
+            )
+            if hasattr(self.vit_branch, 'head'):
+                self.vit_branch.head = nn.Identity()
+            effnet_dim = vit_d_model
+            self.third_branch_name = 'hybrid_vit'
+            self.feature_map_quantum = FeatureMapQuantumEmbedding(
+                input_dim=vit_d_model,
+                output_dim=vit_d_model,
+                n_qubits=quantum_n_qubits,
+                n_layers=quantum_n_layers,
+                rotation_config=quantum_rotation_config,
+                entanglement=quantum_entanglement,
+                dropout=dropout,
+            )
         else:
-            self.efficientnet_branch = get_efficientnet_b3(num_classes=num_classes)
-            effnet_dim = 1536  # EfficientNet-B3 feature dimension
+            from ..efficientnet import get_efficientnet_b3, get_efficientnet_b5
 
-        # Freeze if requested
-        if freeze_backbones:
-            for param in self.efficientnet_branch.features.parameters():
-                param.requires_grad = False
+            if efficientnet_variant == 'b5':
+                self.efficientnet_branch = get_efficientnet_b5(num_classes=num_classes)
+                effnet_dim = 2048  # EfficientNet-B5 feature dimension
+            else:
+                self.efficientnet_branch = get_efficientnet_b3(num_classes=num_classes)
+                effnet_dim = 1536  # EfficientNet-B3 feature dimension
 
-        # EfficientNet uses .features for backbone
-        # Store backbone reference
-        self.efficientnet_backbone = self.efficientnet_branch.features
+            if freeze_backbones:
+                for param in self.efficientnet_branch.features.parameters():
+                    param.requires_grad = False
+
+            self.efficientnet_backbone = self.efficientnet_branch.features
+
+            if quantum_feature_map_mode == 'cnn':
+                self.feature_map_quantum = FeatureMapQuantumEmbedding(
+                    input_dim=effnet_dim,
+                    output_dim=effnet_dim,
+                    n_qubits=quantum_n_qubits,
+                    n_layers=quantum_n_layers,
+                    rotation_config=quantum_rotation_config,
+                    entanglement=quantum_entanglement,
+                    dropout=dropout,
+                )
         
         # ── Feature Projection (match dimensions) ───────────────────
         self.swin_proj = nn.Linear(swin_dim, fusion_dim)
@@ -346,6 +447,8 @@ class TripleBranchCrossAttention(nn.Module):
                 hidden_dim=fusion_dim,
                 n_qubits=quantum_n_qubits,
                 n_layers=quantum_n_layers,
+                rotation_config=quantum_rotation_config,
+                entanglement=quantum_entanglement,
                 dropout=dropout,
             )
         else:
@@ -360,6 +463,8 @@ class TripleBranchCrossAttention(nn.Module):
                 hidden_dim=fusion_dim,
                 n_qubits=quantum_n_qubits,
                 n_layers=quantum_n_layers,
+                rotation_config=quantum_rotation_config,
+                entanglement=quantum_entanglement,
                 dropout=dropout,
                 multi_branch=True,
                 apply_to=['swin', 'convnext'],  # Skip EfficientNet for efficiency
@@ -395,10 +500,15 @@ class TripleBranchCrossAttention(nn.Module):
         """
         swin_feat = self.swin_branch.backbone(x)  # (B, swin_dim)
         convnext_feat = self.convnext_branch.backbone(x)  # (B, convnext_dim)
-        effnet_feat = self.efficientnet_backbone(x)  # (B, effnet_dim)
-        
-        # Apply global average pooling to EfficientNet features
-        effnet_feat = nn.functional.adaptive_avg_pool2d(effnet_feat, (1, 1)).squeeze(-1).squeeze(-1)
+        if self.quantum_feature_map_mode == 'vit':
+            vit_tokens = self.vit_branch.extract_token_features(x)
+            effnet_feat = self.vit_branch.extract_cls_features(x)
+            effnet_feat = effnet_feat + self.feature_map_quantum(vit_tokens[:, 1:])
+        else:
+            effnet_map = self.efficientnet_backbone(x)
+            effnet_feat = nn.functional.adaptive_avg_pool2d(effnet_map, (1, 1)).squeeze(-1).squeeze(-1)
+            if self.quantum_feature_map_mode == 'cnn':
+                effnet_feat = effnet_feat + self.feature_map_quantum(effnet_map)
         
         return swin_feat, convnext_feat, effnet_feat
     
@@ -570,7 +680,7 @@ class TripleBranchCrossAttention(nn.Module):
         return {
             'swin': weights[0].item(),
             'convnext': weights[1].item(),
-            'efficientnet': weights[2].item(),
+            self.third_branch_name: weights[2].item(),
         }
 
 
@@ -592,6 +702,12 @@ def get_triple_branch_fusion(
     use_quantum_bottleneck: bool = False,  # Placement 2
     quantum_n_qubits: int = 8,
     quantum_n_layers: int = 2,
+    quantum_rotation_config: str = 'ry_only',
+    quantum_entanglement: str = 'cyclic',
+    quantum_feature_map_mode: Optional[str] = None,
+    vit_d_model: int = 256,
+    vit_num_heads: int = 4,
+    vit_num_layers: int = 2,
 ) -> TripleBranchCrossAttention:
     """
     Factory for Triple-Branch Cross-Attention Fusion (TBCA-Fusion).
@@ -610,6 +726,12 @@ def get_triple_branch_fusion(
         use_quantum_bottleneck: Enable Placement 2 (Quantum Bottleneck).
         quantum_n_qubits: Number of qubits (default: 8).
         quantum_n_layers: Number of VQC layers (default: 2).
+        quantum_rotation_config: Rotation strategy for local quantum layer.
+        quantum_entanglement: Entanglement strategy for local quantum layer.
+        quantum_feature_map_mode: Optional local quantum placement on feature maps.
+        vit_d_model: Hybrid ViT token dimension for the ViT feature-map branch.
+        vit_num_heads: Hybrid ViT branch attention heads.
+        vit_num_layers: Hybrid ViT branch depth.
 
     Returns:
         TripleBranchCrossAttention model.
@@ -633,4 +755,10 @@ def get_triple_branch_fusion(
         use_quantum_bottleneck=use_quantum_bottleneck,
         quantum_n_qubits=quantum_n_qubits,
         quantum_n_layers=quantum_n_layers,
+        quantum_rotation_config=quantum_rotation_config,
+        quantum_entanglement=quantum_entanglement,
+        quantum_feature_map_mode=quantum_feature_map_mode,
+        vit_d_model=vit_d_model,
+        vit_num_heads=vit_num_heads,
+        vit_num_layers=vit_num_layers,
     )

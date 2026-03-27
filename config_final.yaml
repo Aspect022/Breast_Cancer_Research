@@ -1,0 +1,288 @@
+# Final clean experiment configuration for the breast cancer minor project.
+# Uses only the local GPU-native quantum stack.
+
+data:
+  dataset: "breakhis"
+  data_dir: "data/BreaKHis_v1"
+  task: "binary"
+  subset: null
+  num_workers: 8
+  seed: 42
+
+cv:
+  n_folds: 5
+
+training:
+  epochs: 50
+  patience: 10
+  grad_clip: 1.0
+
+models:
+  efficientnet:
+    enabled: true
+    batch_size: 32
+    lr: 1.0e-4
+    weight_decay: 1.0e-4
+    use_amp: true
+
+  hybrid_vit:
+    enabled: true
+    batch_size: 32
+    lr: 1.0e-4
+    weight_decay: 1.0e-4
+    use_amp: true
+    d_model: 256
+    num_heads: 4
+    num_layers: 2
+    dropout: 0.1
+    warmup_epochs: 5
+    freeze_backbone: false
+
+  swin_small:
+    enabled: true
+    batch_size: 32
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    img_size: 224
+    pretrained: true
+    dropout: 0.3
+
+  convnext_small:
+    enabled: true
+    batch_size: 32
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    pretrained: true
+    dropout: 0.3
+    drop_path_rate: 0.1
+
+  dual_branch_fusion:
+    enabled: true
+    batch_size: 16
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    swin_variant: "small"
+    convnext_variant: "small"
+    dropout: 0.3
+    entropy_weight: 0.01
+
+  qenn_u3:
+    enabled: true
+    batch_size: 16
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: false
+    n_qubits: 8
+    n_layers: 2
+    rotation_config: "u3"
+    entanglement: "cyclic"
+    dropout: 0.3
+
+  quantum_enhanced_fusion:
+    enabled: true
+    batch_size: 16
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: false
+    swin_variant: "small"
+    convnext_variant: "small"
+    n_qubits: 8
+    n_layers: 2
+    rotation_config: "u3"
+    entanglement: "cyclic"
+    dropout: 0.3
+    entropy_weight: 0.01
+
+  triple_branch_fusion:
+    enabled: true
+    batch_size: 10
+    lr: 1.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    swin_variant: "small"
+    convnext_variant: "small"
+    efficientnet_variant: "b5"
+    dropout: 0.3
+    fusion_dim: 768
+    num_heads: 8
+    entropy_weight: 0.01
+
+  triple_branch_fusion_quantum:
+    enabled: true
+    batch_size: 10
+    lr: 1.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    swin_variant: "small"
+    convnext_variant: "small"
+    efficientnet_variant: "b5"
+    dropout: 0.3
+    fusion_dim: 768
+    num_heads: 8
+    entropy_weight: 0.01
+    use_quantum_fusion: true
+    use_quantum_bottleneck: false
+    quantum_n_qubits: 8
+    quantum_n_layers: 2
+    quantum_rotation_config: "u3"
+    quantum_entanglement: "cyclic"
+
+  triple_branch_fusion_bottleneck:
+    enabled: true
+    batch_size: 10
+    lr: 1.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    swin_variant: "small"
+    convnext_variant: "small"
+    efficientnet_variant: "b5"
+    dropout: 0.3
+    fusion_dim: 768
+    num_heads: 8
+    entropy_weight: 0.01
+    use_quantum_fusion: false
+    use_quantum_bottleneck: true
+    quantum_n_qubits: 8
+    quantum_n_layers: 2
+    quantum_rotation_config: "u3"
+    quantum_entanglement: "cyclic"
+
+  triple_branch_fusion_cnn_featuremap_quantum:
+    enabled: true
+    batch_size: 10
+    lr: 1.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    swin_variant: "small"
+    convnext_variant: "small"
+    efficientnet_variant: "b5"
+    dropout: 0.3
+    fusion_dim: 768
+    num_heads: 8
+    entropy_weight: 0.01
+    quantum_n_qubits: 8
+    quantum_n_layers: 2
+    quantum_rotation_config: "u3"
+    quantum_entanglement: "cyclic"
+
+  triple_branch_fusion_vit_featuremap_quantum:
+    enabled: true
+    batch_size: 8
+    lr: 1.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    swin_variant: "small"
+    convnext_variant: "small"
+    efficientnet_variant: "b5"
+    dropout: 0.3
+    fusion_dim: 768
+    num_heads: 8
+    entropy_weight: 0.01
+    quantum_n_qubits: 8
+    quantum_n_layers: 2
+    quantum_rotation_config: "u3"
+    quantum_entanglement: "cyclic"
+    vit_d_model: 256
+    vit_num_heads: 4
+    vit_num_layers: 2
+
+  cb_qccf:
+    enabled: true
+    batch_size: 16
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: false
+    backbone: "swin_small"
+    quantum_backbone: "resnet18"
+    n_qubits: 8
+    n_layers: 2
+    rotation_config: "u3"
+    entanglement: "cyclic"
+    dropout: 0.3
+    specificity_weight: 2.0
+
+  cb_qccf_convnet_efficient:
+    enabled: true
+    batch_size: 14
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: false
+    n_qubits: 8
+    n_layers: 2
+    rotation_config: "u3"
+    entanglement: "cyclic"
+    dropout: 0.3
+    specificity_weight: 2.0
+
+  cb_qccf_swin_convnet:
+    enabled: true
+    batch_size: 16
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: false
+    n_qubits: 8
+    n_layers: 2
+    rotation_config: "u3"
+    entanglement: "cyclic"
+    dropout: 0.3
+    specificity_weight: 2.0
+
+  multi_scale_quantum_fusion:
+    enabled: true
+    batch_size: 16
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: false
+    backbone: "resnet34"
+    n_qubits: 8
+    n_layers: 2
+    dropout: 0.3
+    scale_configs:
+      - ["ry_only", "cyclic"]
+      - ["ry_rz", "cyclic"]
+      - ["u3", "full"]
+
+  vit_tiny:
+    enabled: false
+  swin_tiny:
+    enabled: false
+  swin_v2_small:
+    enabled: false
+  convnext_tiny:
+    enabled: false
+  deit_tiny:
+    enabled: false
+  deit_small:
+    enabled: false
+  deit_base:
+    enabled: false
+  qenn_ry:
+    enabled: false
+  qenn_ry_rz:
+    enabled: false
+  qenn_rx_ry_rz:
+    enabled: false
+  ensemble_distillation:
+    enabled: false
+  spiking:
+    enabled: false
+  quantum:
+    enabled: false
+
+output:
+  output_dir: "outputs/final_runs"
+  save_best_model: true
+  save_plots: true
+  save_csv: true
+  save_checkpoints: true
+  wandb_enabled: true
+  wandb_project: "breast-cancer-final"
+
+gpu:
+  use_flash_attention: true
+  use_tf32: true
+  benchmark_mode: true
+  deterministic: false

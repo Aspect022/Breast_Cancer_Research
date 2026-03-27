@@ -128,6 +128,31 @@ class HybridCNNViT(nn.Module):
             nn.Linear(d_model, num_classes),
         )
 
+    def extract_token_features(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Extract transformer token features before classification.
+
+        Returns:
+            Token sequence including CLS token: (B, 50, d_model)
+        """
+        B = x.size(0)
+
+        feat = self.features(x)
+        feat = feat.flatten(2).transpose(1, 2)
+        feat = self.proj(feat)
+
+        cls_tokens = self.cls_token.expand(B, -1, -1)
+        feat = torch.cat([cls_tokens, feat], dim=1)
+        feat = feat + self.pos_embed
+        feat = self.transformer(feat)
+        feat = self.norm(feat)
+        return feat
+
+    def extract_cls_features(self, x: torch.Tensor) -> torch.Tensor:
+        """Extract CLS embedding before the classification head."""
+        tokens = self.extract_token_features(x)
+        return tokens[:, 0]
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Args:
@@ -136,30 +161,7 @@ class HybridCNNViT(nn.Module):
         Returns:
             Logits (B, num_classes).
         """
-        B = x.size(0)
-
-        # Extract CNN features: (B, 1536, 7, 7)
-        feat = self.features(x)
-
-        # Flatten spatial dims to sequence: (B, 1536, 49) → (B, 49, 1536)
-        feat = feat.flatten(2).transpose(1, 2)
-
-        # Project to d_model: (B, 49, d_model)
-        feat = self.proj(feat)
-
-        # Prepend CLS token: (B, 50, d_model)
-        cls_tokens = self.cls_token.expand(B, -1, -1)
-        feat = torch.cat([cls_tokens, feat], dim=1)
-
-        # Add positional embedding
-        feat = feat + self.pos_embed
-
-        # Transformer encoder
-        feat = self.transformer(feat)
-        feat = self.norm(feat)
-
-        # CLS token output → classification
-        cls_out = feat[:, 0]
+        cls_out = self.extract_cls_features(x)
         return self.head(cls_out)
 
 

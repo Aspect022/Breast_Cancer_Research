@@ -42,7 +42,7 @@ class WandBLogger:
     
     def __init__(
         self,
-        project: str = "breast-cancer-transformers",
+        project: str = "breast-cancer-final",
         config: Optional[Dict] = None,
         wandb_config_path: str = "wandb_config.yaml",
         run_name: Optional[str] = None,
@@ -76,7 +76,6 @@ class WandBLogger:
         # Generate run name if not provided
         if run_name is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            model_name = self.config.get('models', {}).keys()
             run_name = f"breast_cancer_{timestamp}"
         
         self.run_name = run_name
@@ -89,8 +88,10 @@ class WandBLogger:
         """Load W&B configuration from YAML file."""
         if os.path.exists(config_path):
             with open(config_path, 'r') as f:
-                full_config = yaml.safe_load(f)
-                return full_config.get('wandb', {})
+                full_config = yaml.safe_load(f) or {}
+                if 'wandb' in full_config and isinstance(full_config['wandb'], dict):
+                    return full_config['wandb']
+                return full_config
         return {}
     
     def init(
@@ -110,7 +111,7 @@ class WandBLogger:
         
         # Prepare W&B config
         wandb_cfg = {
-            'project': self.wandb_cfg.get('project', self.project),
+            'project': self.project or self.wandb_cfg.get('project', 'breast-cancer-final'),
             'name': self.run_name,
             'tags': self.tags,
             'config': self.config,
@@ -129,7 +130,7 @@ class WandBLogger:
         self.initialized = True
         
         # Log model architecture
-        if model is not None:
+        if model is not None and self.wandb_cfg.get('log_architecture', False):
             self.log_model_architecture(model, model_name)
         
         print(f"✓ W&B initialized: {wandb.run.url}")

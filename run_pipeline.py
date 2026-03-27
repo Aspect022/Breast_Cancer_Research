@@ -24,7 +24,7 @@ from datetime import datetime
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.amp import GradScaler, autocast
-from typing import Optional
+from typing import Any, Dict, Optional
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(__file__))
@@ -47,8 +47,12 @@ from src.models.fusion import (
     get_quantum_enhanced_fusion,
     get_triple_branch_fusion,
     get_cb_qccf,
+    get_cb_qccf_convnet_efficient,
+    get_cb_qccf_swin_convnet,
     get_multi_scale_quantum_fusion,
     get_ensemble_distillation,
+    ClassBalancedLoss,
+    EnsembleDistillationLoss,
 )
 from src.utils.metrics import (
     compute_metrics, print_medical_metrics, get_convergence_epoch,
@@ -72,6 +76,48 @@ TASK_CLASS_NAMES = {
     'binary': ['Benign', 'Malignant'],
     'multi': ['IDC', 'ILC', 'Fibroadenoma']
 }
+
+
+def build_wandb_run_config(
+    cfg: Dict[str, Any],
+    model_name: str,
+    display_name: str,
+    paradigm_type: str,
+    model_cfg: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Create a small, readable W&B config instead of logging the full YAML."""
+    clean_cfg = {
+        'dataset': cfg['data']['dataset'],
+        'task': cfg['data']['task'],
+        'n_folds': cfg['cv']['n_folds'],
+        'epochs': cfg['training']['epochs'],
+        'patience': cfg['training']['patience'],
+        'grad_clip': cfg['training'].get('grad_clip', 1.0),
+        'model_key': model_name,
+        'model_name': display_name,
+        'paradigm': paradigm_type,
+        'batch_size': model_cfg.get('batch_size'),
+        'lr': model_cfg.get('lr'),
+        'weight_decay': model_cfg.get('weight_decay'),
+        'use_amp': model_cfg.get('use_amp'),
+    }
+
+    optional_keys = [
+        'swin_variant', 'convnext_variant', 'efficientnet_variant',
+        'backbone', 'quantum_backbone', 'student_model',
+        'n_qubits', 'n_layers', 'rotation_config', 'entanglement',
+        'quantum_n_qubits', 'quantum_n_layers',
+        'quantum_rotation_config', 'quantum_entanglement',
+        'quantum_feature_map_mode', 'vit_d_model', 'vit_num_heads', 'vit_num_layers',
+        'fusion_dim', 'num_heads', 'entropy_weight',
+        'specificity_weight', 'temperature', 'distillation_alpha',
+    ]
+
+    for key in optional_keys:
+        if key in model_cfg:
+            clean_cfg[key] = model_cfg[key]
+
+    return clean_cfg
 
 
 # ─────────────────────────────────────────────
@@ -276,6 +322,8 @@ def build_model(model_name, num_classes, model_cfg):
             use_quantum_bottleneck=model_cfg.get('use_quantum_bottleneck', False),
             quantum_n_qubits=model_cfg.get('quantum_n_qubits', 8),
             quantum_n_layers=model_cfg.get('quantum_n_layers', 2),
+            quantum_rotation_config=model_cfg.get('quantum_rotation_config', 'ry_only'),
+            quantum_entanglement=model_cfg.get('quantum_entanglement', 'cyclic'),
         )
         return model, 'TripleBranch-Fusion', 'fusion'
     
@@ -315,6 +363,47 @@ def build_model(model_name, num_classes, model_cfg):
             quantum_n_layers=model_cfg.get('quantum_n_layers', 2),
         )
         return model, 'TBCA-Quantum-Bottleneck', 'fusion_quantum'
+
+    elif model_name == 'triple_branch_fusion_cnn_featuremap_quantum':
+        model = get_triple_branch_fusion(
+            num_classes=num_classes,
+            swin_variant=model_cfg.get('swin_variant', 'small'),
+            convnext_variant=model_cfg.get('convnext_variant', 'small'),
+            efficientnet_variant=model_cfg.get('efficientnet_variant', 'b5'),
+            dropout=model_cfg.get('dropout', 0.3),
+            fusion_dim=model_cfg.get('fusion_dim', 768),
+            num_heads=model_cfg.get('num_heads', 8),
+            entropy_weight=model_cfg.get('entropy_weight', 0.01),
+            freeze_backbones=model_cfg.get('freeze_backbones', False),
+            quantum_n_qubits=model_cfg.get('quantum_n_qubits', 8),
+            quantum_n_layers=model_cfg.get('quantum_n_layers', 2),
+            quantum_rotation_config=model_cfg.get('quantum_rotation_config', 'u3'),
+            quantum_entanglement=model_cfg.get('quantum_entanglement', 'cyclic'),
+            quantum_feature_map_mode='cnn',
+        )
+        return model, 'TBCA-CNN-FeatureMap-Quantum', 'fusion_quantum'
+
+    elif model_name == 'triple_branch_fusion_vit_featuremap_quantum':
+        model = get_triple_branch_fusion(
+            num_classes=num_classes,
+            swin_variant=model_cfg.get('swin_variant', 'small'),
+            convnext_variant=model_cfg.get('convnext_variant', 'small'),
+            efficientnet_variant=model_cfg.get('efficientnet_variant', 'b5'),
+            dropout=model_cfg.get('dropout', 0.3),
+            fusion_dim=model_cfg.get('fusion_dim', 768),
+            num_heads=model_cfg.get('num_heads', 8),
+            entropy_weight=model_cfg.get('entropy_weight', 0.01),
+            freeze_backbones=model_cfg.get('freeze_backbones', False),
+            quantum_n_qubits=model_cfg.get('quantum_n_qubits', 8),
+            quantum_n_layers=model_cfg.get('quantum_n_layers', 2),
+            quantum_rotation_config=model_cfg.get('quantum_rotation_config', 'u3'),
+            quantum_entanglement=model_cfg.get('quantum_entanglement', 'cyclic'),
+            quantum_feature_map_mode='vit',
+            vit_d_model=model_cfg.get('vit_d_model', 256),
+            vit_num_heads=model_cfg.get('vit_num_heads', 4),
+            vit_num_layers=model_cfg.get('vit_num_layers', 2),
+        )
+        return model, 'TBCA-ViT-FeatureMap-Quantum', 'fusion_quantum'
 
     elif model_name == 'cb_qccf':
         model = get_cb_qccf(
@@ -390,12 +479,49 @@ def build_model(model_name, num_classes, model_cfg):
         raise ValueError(f"Unknown model: {model_name}")
 
 
+def build_criterion(model_name: str, model_cfg: Dict[str, Any]) -> nn.Module:
+    """Return the appropriate objective for the selected model."""
+    if model_name in {'cb_qccf', 'cb_qccf_convnet_efficient', 'cb_qccf_swin_convnet'}:
+        return ClassBalancedLoss(
+            specificity_weight=model_cfg.get('specificity_weight', 2.0),
+        )
+    if model_name == 'ensemble_distillation':
+        return EnsembleDistillationLoss(
+            temperature=model_cfg.get('temperature', 4.0),
+            alpha=model_cfg.get('distillation_alpha', 0.7),
+        )
+    return nn.CrossEntropyLoss()
+
+
+def compute_loss_and_logits(
+    model: nn.Module,
+    images: torch.Tensor,
+    labels: torch.Tensor,
+    criterion: nn.Module,
+    model_name: str,
+):
+    """Handle models with custom forward signatures and losses."""
+    if model_name in {'cb_qccf', 'cb_qccf_convnet_efficient', 'cb_qccf_swin_convnet'}:
+        final_pred, sens_pred, spec_pred = model(images, return_all=True)
+        loss = criterion(final_pred, sens_pred, spec_pred, labels)
+        return final_pred, loss
+
+    if model_name == 'ensemble_distillation':
+        student_logits, ensemble_logits = model(images, return_ensemble=True)
+        loss, _ = criterion(student_logits, ensemble_logits, labels)
+        return student_logits, loss
+
+    logits = model(images)
+    loss = criterion(logits, labels)
+    return logits, loss
+
+
 # ─────────────────────────────────────────────
 # Training & Evaluation
 # ─────────────────────────────────────────────
 
 def train_one_epoch(model, loader, criterion, optimizer, device,
-                    use_amp=True, scaler=None, grad_clip=1.0):
+                    use_amp=True, scaler=None, grad_clip=1.0, model_name=''):
     model.train()
     running_loss = 0.0
     correct = 0
@@ -409,8 +535,9 @@ def train_one_epoch(model, loader, criterion, optimizer, device,
 
         if use_amp and scaler is not None:
             with autocast('cuda'):
-                outputs = model(images)
-                loss = criterion(outputs, labels)
+                outputs, loss = compute_loss_and_logits(
+                    model, images, labels, criterion, model_name
+                )
             scaler.scale(loss).backward()
             if grad_clip > 0:
                 scaler.unscale_(optimizer)
@@ -418,8 +545,9 @@ def train_one_epoch(model, loader, criterion, optimizer, device,
             scaler.step(optimizer)
             scaler.update()
         else:
-            outputs = model(images)
-            loss = criterion(outputs, labels)
+            outputs, loss = compute_loss_and_logits(
+                model, images, labels, criterion, model_name
+            )
             loss.backward()
             if grad_clip > 0:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
@@ -434,7 +562,7 @@ def train_one_epoch(model, loader, criterion, optimizer, device,
 
 
 @torch.no_grad()
-def evaluate(model, loader, criterion, device, use_amp=True):
+def evaluate(model, loader, criterion, device, use_amp=True, model_name=''):
     model.eval()
     running_loss = 0.0
     correct = 0
@@ -449,11 +577,13 @@ def evaluate(model, loader, criterion, device, use_amp=True):
 
         if use_amp:
             with autocast('cuda'):
-                outputs = model(images)
-                loss = criterion(outputs, labels)
+                outputs, loss = compute_loss_and_logits(
+                    model, images, labels, criterion, model_name
+                )
         else:
-            outputs = model(images)
-            loss = criterion(outputs, labels)
+            outputs, loss = compute_loss_and_logits(
+                model, images, labels, criterion, model_name
+            )
 
         running_loss += loss.item() * images.size(0)
         _, predicted = outputs.max(1)
@@ -511,7 +641,8 @@ def train_fold(
 
     num_classes = list(model.parameters())[-1].shape[0]
 
-    criterion = nn.CrossEntropyLoss()
+    model_name = model_cfg.get('model_key', display_name)
+    criterion = build_criterion(model_name, model_cfg)
     optimizer = AdamW(model.parameters(), lr=lr, weight_decay=wd)
     scheduler = CosineAnnealingLR(optimizer, T_max=epochs)
     scaler = GradScaler('cuda') if use_amp else None
@@ -536,14 +667,17 @@ def train_fold(
 
         train_loss, train_acc = train_one_epoch(
             model, train_loader, criterion, optimizer, device,
-            use_amp=use_amp, scaler=scaler, grad_clip=grad_clip
+            use_amp=use_amp, scaler=scaler, grad_clip=grad_clip,
+            model_name=model_name,
         )
 
         val_loss, val_acc, val_labels, val_probs = evaluate(
-            model, val_loader, criterion, device, use_amp=use_amp
+            model, val_loader, criterion, device, use_amp=use_amp,
+            model_name=model_name,
         )
 
-        val_auc = compute_val_auc(val_labels, val_probs, num_classes)
+        val_metrics = compute_metrics(val_labels, val_probs, num_classes)
+        val_auc = val_metrics['auc']
 
         if epoch > warmup_epochs:
             scheduler.step()
@@ -573,6 +707,18 @@ def train_fold(
                 val_acc=val_acc,
                 val_auc=val_auc,
                 lr=current_lr,
+                additional_metrics={
+                    'fold': fold_idx + 1,
+                    'dataset': model_cfg.get('dataset_name', 'unknown'),
+                    'val/f1': val_metrics['f1'],
+                    'val/mcc': val_metrics['mcc'],
+                    'val/sensitivity': val_metrics['sensitivity'],
+                    'val/specificity': val_metrics['specificity'],
+                    'val/fnr': val_metrics['fnr'],
+                    'val/ppv': val_metrics['ppv'],
+                    'val/npv': val_metrics['npv'],
+                    'val/balanced_accuracy': val_metrics['balanced_accuracy'],
+                },
             )
             
             # Log weights and biases periodically (only for first fold to avoid spam)
@@ -623,9 +769,10 @@ def evaluate_on_test(model, best_path, test_loader, device, num_classes,
                      class_names, display_name, output_dir, fold_idx, use_amp):
     model.load_state_dict(torch.load(best_path, weights_only=True, map_location=device))
 
-    criterion = nn.CrossEntropyLoss()
+    model_name = getattr(model, '_model_key', '')
+    criterion = build_criterion(model_name, {})
     test_loss, test_acc, test_labels, test_probs = evaluate(
-        model, test_loader, criterion, device, use_amp=use_amp
+        model, test_loader, criterion, device, use_amp=use_amp, model_name=model_name
     )
 
     test_metrics = compute_metrics(test_labels, test_probs, num_classes, class_names)
@@ -698,7 +845,7 @@ def run_model_pipeline(model_name, cfg, all_results, wandb_run=None):
     data_cfg = cfg['data']
     cv_cfg = cfg['cv']
     train_cfg = cfg['training']
-    model_cfg = cfg['models'][model_name]
+    model_cfg = dict(cfg['models'][model_name])
     out_cfg = cfg['output']
 
     task = data_cfg['task']
@@ -707,8 +854,10 @@ def run_model_pipeline(model_name, cfg, all_results, wandb_run=None):
     n_folds = cv_cfg['n_folds']
     seed = data_cfg.get('seed', 42)
 
-    force_cpu = (model_name == 'quantum' and model_cfg.get('use_pennylane', True))
+    force_cpu = False
     device = torch.device('cpu' if force_cpu else ('cuda' if torch.cuda.is_available() else 'cpu'))
+    model_cfg['model_key'] = model_name
+    model_cfg['dataset_name'] = data_cfg['dataset']
 
     model_proto, display_name, paradigm_type = build_model(model_name, num_classes, model_cfg)
     total_params, trainable_params = count_parameters(model_proto)
@@ -728,8 +877,10 @@ def run_model_pipeline(model_name, cfg, all_results, wandb_run=None):
     wandb_logger = None
     if cfg.get('output', {}).get('wandb_enabled', False):
         wandb_logger = WandBLogger(
-            config=cfg,
-            run_name=display_name,  # Use model name as run name
+            project=out_cfg.get('wandb_project', 'breast-cancer-final'),
+            config=build_wandb_run_config(cfg, model_name, display_name, paradigm_type, model_cfg),
+            run_name=f"{data_cfg['dataset']}-{display_name}",
+            tags=[data_cfg['dataset'], paradigm_type, model_name],
         )
         if not wandb_logger.initialized:
             # Create ONE W&B run for all folds of this model
@@ -753,6 +904,7 @@ def run_model_pipeline(model_name, cfg, all_results, wandb_run=None):
 
         model, _, _ = build_model(model_name, num_classes, model_cfg)
         model = model.to(device)
+        model._model_key = model_name
 
         # Train (use model-level W&B logger, log fold as metric)
         fold_result = train_fold(
@@ -843,6 +995,7 @@ def run_model_pipeline(model_name, cfg, all_results, wandb_run=None):
     if wandb_logger is not None and wandb_logger.initialized:
         # Log averaged metrics
         wandb_logger.log_metrics({
+            'dataset': data_cfg['dataset'],
             'accuracy': agg['Mean_Acc'],
             'accuracy_std': agg.get('Std_Acc', 0),
             'f1_score': agg['Mean_F1'],
@@ -885,6 +1038,9 @@ def run_model_pipeline(model_name, cfg, all_results, wandb_run=None):
     print(f"  ║ NPV:         {agg['Mean_NPV']:.4f} ± {agg['Std_NPV']:.4f}")
     print(f"  ║ Time:        {agg['Total_Time_s']:.0f}s")
     print(f"  ╚{'═'*40}╝")
+
+    if wandb_logger is not None:
+        wandb_logger.finish()
 
 
 # ─────────────────────────────────────────────
@@ -935,7 +1091,6 @@ def main():
         'dual_branch_fusion',
         
         # Quantum models (Phase 3)
-        'quantum',  # PennyLane legacy
         'qenn_ry',
         'qenn_ry_rz',
         'qenn_u3',
@@ -953,6 +1108,8 @@ def main():
         'triple_branch_fusion',
         'triple_branch_fusion_quantum',
         'triple_branch_fusion_bottleneck',
+        'triple_branch_fusion_cnn_featuremap_quantum',
+        'triple_branch_fusion_vit_featuremap_quantum',
     ]
 
     if args.models:
@@ -985,7 +1142,7 @@ def main():
     # Initialize W&B project (not run - runs created per model)
     if cfg.get('output', {}).get('wandb_enabled', False):
         print("\n🚀 Weights & Biases enabled")
-        print(f"   Project: {cfg['output'].get('wandb_project', 'breast-cancer-transformers')}")
+        print(f"   Project: {cfg['output'].get('wandb_project', 'breast-cancer-final')}")
         print(f"   Entity: {cfg.get('wandb', {}).get('entity', 'tgijayesh-dayananda-sagar-university')}")
         print(f"   Model runs will be created for each fold")
 
@@ -1036,14 +1193,6 @@ def main():
         print(f"\nTotal pipeline time: {pipeline_time:.0f}s ({pipeline_time/60:.1f} min)")
     else:
         print("\nNo results to compare.")
-
-    # Finish W&B
-    try:
-        wandb.finish()
-        print("\n🏁 Weights & Biases run finished")
-        print(f"✓ View dashboard: https://wandb.ai/tgijayesh-dayananda-sagar-university/breast-cancer-transformers")
-    except:
-        pass
 
     print("\n✓ Pipeline complete!")
 
