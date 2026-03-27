@@ -5,6 +5,7 @@
 Use `config_final.yaml` for the official rerun set:
 
 - `efficientnet`
+- `efficientnet_b5`
 - `hybrid_vit`
 - `swin_small`
 - `convnext_small`

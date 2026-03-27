@@ -30,7 +30,7 @@ from typing import Any, Dict, Optional
 sys.path.insert(0, os.path.dirname(__file__))
 
 from src.data.dataset import get_kfold_splits, set_seed, get_multidataset_kfold_splits
-from src.models.efficientnet import get_efficientnet_b3
+from src.models.efficientnet import get_efficientnet_b3, get_efficientnet_b5
 from src.models.transformer import (
     get_hybrid_vit, get_vit_tiny,
     get_swin_tiny, get_swin_small, get_swin_v2_small,
@@ -130,6 +130,8 @@ def build_model(model_name, num_classes, model_cfg):
     # ── Baseline CNN ─────────────────────────────────────────
     if model_name == 'efficientnet':
         return get_efficientnet_b3(num_classes), 'EfficientNet-B3', 'cnn'
+    elif model_name == 'efficientnet_b5':
+        return get_efficientnet_b5(num_classes), 'EfficientNet-B5', 'cnn'
 
     # ── Spiking Neural Network (Legacy) ──────────────────────
     elif model_name == 'spiking':
@@ -1074,6 +1076,7 @@ def main():
     model_order = [
         # Baseline
         'efficientnet',
+        'efficientnet_b5',
         'hybrid_vit',
         'vit_tiny',
         

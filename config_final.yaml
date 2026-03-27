@@ -25,6 +25,13 @@ models:
     weight_decay: 1.0e-4
     use_amp: true
 
+  efficientnet_b5:
+    enabled: true
+    batch_size: 16
+    lr: 1.0e-4
+    weight_decay: 1.0e-4
+    use_amp: true
+
   hybrid_vit:
     enabled: true
     batch_size: 32
