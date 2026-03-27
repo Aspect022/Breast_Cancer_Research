@@ -68,7 +68,10 @@ def compute_metrics(y_true, y_probs, num_classes, class_names=None):
 
     # ── AUC-ROC ──
     try:
-        if num_classes == 2:
+        unique_labels = np.unique(y_true)
+        if len(unique_labels) < 2:
+            auc_score = 0.0
+        elif num_classes == 2:
             auc_score = roc_auc_score(y_true, y_probs[:, 1])
         else:
             auc_score = roc_auc_score(

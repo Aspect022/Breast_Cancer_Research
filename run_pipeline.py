@@ -606,6 +606,8 @@ def evaluate(model, loader, criterion, device, use_amp=True, model_name=''):
 
 def compute_val_auc(val_labels, val_probs, num_classes):
     try:
+        if len(np.unique(val_labels)) < 2:
+            return 0.0
         from sklearn.metrics import roc_auc_score
         if num_classes == 2:
             return float(np.nan_to_num(roc_auc_score(val_labels, val_probs[:, 1])))

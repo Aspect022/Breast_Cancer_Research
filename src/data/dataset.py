@@ -5,7 +5,11 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from PIL import Image
-from sklearn.model_selection import GroupShuffleSplit, GroupKFold
+from sklearn.model_selection import GroupShuffleSplit, GroupKFold, train_test_split
+try:
+    from sklearn.model_selection import StratifiedGroupKFold
+except ImportError:
+    StratifiedGroupKFold = None
 import pandas as pd
 from typing import Optional, Tuple, Dict
 
@@ -84,6 +88,45 @@ def get_transforms():
     ])
     
     return train_transform, val_test_transform
+
+
+def _build_group_label_table(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Build a patient-level label table for stratified group splits.
+
+    If a patient appears with mixed labels, use the majority label.
+    """
+    group_df = (
+        df.groupby('patient_id')['label']
+        .agg(lambda x: x.value_counts().idxmax())
+        .reset_index()
+    )
+    return group_df
+
+
+def stratified_group_holdout_split(
+    df: pd.DataFrame,
+    test_size: float,
+    seed: int,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Create a patient-grouped, class-stratified holdout split.
+    """
+    group_df = _build_group_label_table(df)
+
+    train_groups, test_groups = train_test_split(
+        group_df['patient_id'].values,
+        test_size=test_size,
+        random_state=seed,
+        stratify=group_df['label'].values,
+    )
+
+    train_mask = df['patient_id'].isin(set(train_groups))
+    test_mask = df['patient_id'].isin(set(test_groups))
+
+    train_idx = np.where(train_mask)[0]
+    test_idx = np.where(test_mask)[0]
+    return train_idx, test_idx
 
 def parse_breakhis_directory(data_dir, task="binary"):
     """
@@ -177,16 +220,14 @@ def get_dataloaders(data_dir, task="binary", batch_size=32, subset_size=None, nu
     print(f"Total images found: {len(df)} | Task: {task}")
     print(df['label'].value_counts())
         
-    # Split 1: 70% Train, 30% Temp (Val + Test)
-    gss_train = GroupShuffleSplit(n_splits=1, train_size=0.7, random_state=42)
-    train_idx, temp_idx = next(gss_train.split(df, df['label'], groups=df['patient_id']))
+    # Split 1: 70% Train, 30% Temp (Val + Test), patient-grouped and stratified
+    train_idx, temp_idx = stratified_group_holdout_split(df, test_size=0.30, seed=42)
     
     df_train = df.iloc[train_idx].reset_index(drop=True)
     df_temp = df.iloc[temp_idx].reset_index(drop=True)
     
     # Split 2: 50% Val, 50% Test from the Temp partition (resulting in 15% / 15% overall)
-    gss_test = GroupShuffleSplit(n_splits=1, train_size=0.5, random_state=42)
-    val_idx, test_idx = next(gss_test.split(df_temp, df_temp['label'], groups=df_temp['patient_id']))
+    val_idx, test_idx = stratified_group_holdout_split(df_temp, test_size=0.50, seed=42)
     
     df_val = df_temp.iloc[val_idx].reset_index(drop=True)
     df_test = df_temp.iloc[test_idx].reset_index(drop=True)
@@ -250,9 +291,8 @@ def get_kfold_splits(data_dir, task="binary", n_folds=5, batch_size=32,
     print(f"Total images: {len(df)} | Task: {task} | Classes: {num_classes}")
     print(df['label'].value_counts())
 
-    # ── Hold out 15% as a fixed test set (patient-grouped) ──
-    gss = GroupShuffleSplit(n_splits=1, test_size=0.15, random_state=seed)
-    trainval_idx, test_idx = next(gss.split(df, df['label'], groups=df['patient_id']))
+    # ── Hold out 15% as a fixed test set (patient-grouped + stratified) ──
+    trainval_idx, test_idx = stratified_group_holdout_split(df, test_size=0.15, seed=seed)
 
     df_trainval = df.iloc[trainval_idx].reset_index(drop=True)
     df_test = df.iloc[test_idx].reset_index(drop=True)
@@ -274,12 +314,25 @@ def get_kfold_splits(data_dir, task="binary", n_folds=5, batch_size=32,
     )
 
     # ── K-Fold on train+val pool ──
-    gkf = GroupKFold(n_splits=n_folds)
     train_tf, val_tf = get_transforms()
 
-    for fold_idx, (train_idx, val_idx) in enumerate(
-        gkf.split(df_trainval, df_trainval['label'], groups=df_trainval['patient_id'])
-    ):
+    if StratifiedGroupKFold is not None:
+        splitter = StratifiedGroupKFold(n_splits=n_folds, shuffle=True, random_state=seed)
+        split_iter = splitter.split(
+            df_trainval,
+            df_trainval['label'],
+            groups=df_trainval['patient_id'],
+        )
+    else:
+        print("Warning: StratifiedGroupKFold not available; falling back to GroupKFold.")
+        splitter = GroupKFold(n_splits=n_folds)
+        split_iter = splitter.split(
+            df_trainval,
+            df_trainval['label'],
+            groups=df_trainval['patient_id'],
+        )
+
+    for fold_idx, (train_idx, val_idx) in enumerate(split_iter):
         df_train = df_trainval.iloc[train_idx].reset_index(drop=True)
         df_val = df_trainval.iloc[val_idx].reset_index(drop=True)
 
@@ -289,6 +342,8 @@ def get_kfold_splits(data_dir, task="binary", n_folds=5, batch_size=32,
         assert len(fold_train_p & fold_val_p) == 0, f"Leakage in fold {fold_idx}!"
 
         print(f"Fold {fold_idx + 1}/{n_folds} — Train: {len(df_train)} | Val: {len(df_val)}")
+        print(f"  Train labels: {df_train['label'].value_counts().sort_index().to_dict()}")
+        print(f"  Val labels:   {df_val['label'].value_counts().sort_index().to_dict()}")
 
         train_ds = BreakHisDataset(df_train['path'], df_train['label'], transform=train_tf)
         val_ds = BreakHisDataset(df_val['path'], df_val['label'], transform=val_tf)
@@ -1131,4 +1186,3 @@ def get_multidataset_kfold_splits(
                 val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
                 
                 yield fold_idx, train_loader, val_loader, test_loader, 2
-
