@@ -502,7 +502,7 @@ output:
   save_csv: true  # Per-fold and summary CSVs
   save_checkpoints: true  # Save best model per fold
   wandb_enabled: true  # Enable Weights & Biases tracking
-  wandb_project: "breast-cancer-transformers"
+  wandb_project: "breast-cancer-histopathology-final-2026"
 
 # ── A100 GPU Optimizations ─────────────────────────────────────
 gpu:
