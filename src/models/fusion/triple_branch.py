@@ -92,51 +92,63 @@ class CrossAttention(nn.Module):
         attention_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
-        Forward pass for cross-attention.
-        
+        Forward pass for two-token cross-attention.
+
+        The query and key features are stacked as a 2-token sequence so that the
+        model can learn to attend from query->key AND key->query simultaneously.
+        This produces a meaningful (B, H, 2, 2) attention map instead of the
+        trivial (B, H, 1, 1) scalar that results from single-token sequences.
+
         Args:
             query: Query features (B, dim).
             key: Key features (B, dim).
             value: Value features (B, dim).
             attention_mask: Optional attention mask.
-            
+
         Returns:
-            Attended features (B, dim).
+            Attended query features (B, dim).
         """
         # Project to Q, K, V
-        q = self.q_proj(query).unsqueeze(1)  # (B, 1, dim)
-        k = self.k_proj(key).unsqueeze(1)    # (B, 1, dim)
-        v = self.v_proj(value).unsqueeze(1)  # (B, 1, dim)
-        
-        batch_size = q.shape[0]
-        
-        # Reshape for multi-head attention
-        q = q.view(batch_size, 1, self.num_heads, self.head_dim).transpose(1, 2)  # (B, H, 1, D)
-        k = k.view(batch_size, 1, self.num_heads, self.head_dim).transpose(1, 2)  # (B, H, 1, D)
-        v = v.view(batch_size, 1, self.num_heads, self.head_dim).transpose(1, 2)  # (B, H, 1, D)
-        
-        # Compute attention scores
-        attn_scores = torch.matmul(q, k.transpose(-2, -1)) / (self.head_dim ** 0.5)  # (B, H, 1, 1)
-        
+        q_proj = self.q_proj(query)  # (B, dim)
+        k_proj = self.k_proj(key)    # (B, dim)
+        v_proj = self.v_proj(value)  # (B, dim)
+
+        batch_size = q_proj.shape[0]
+
+        # Stack as 2-token sequences — enables genuine cross-branch attention
+        # Shape: (B, 2, dim) where token 0 = query branch, token 1 = key branch
+        q_seq = torch.stack([q_proj, k_proj], dim=1)  # (B, 2, dim)
+        k_seq = torch.stack([k_proj, q_proj], dim=1)  # (B, 2, dim) — reversed for cross
+        v_seq = torch.stack([v_proj, v_proj], dim=1)  # (B, 2, dim)
+
+        # Reshape for multi-head attention: (B, num_heads, seq_len, head_dim)
+        q_seq = q_seq.view(batch_size, 2, self.num_heads, self.head_dim).transpose(1, 2)
+        k_seq = k_seq.view(batch_size, 2, self.num_heads, self.head_dim).transpose(1, 2)
+        v_seq = v_seq.view(batch_size, 2, self.num_heads, self.head_dim).transpose(1, 2)
+
+        # Compute attention scores: (B, H, 2, 2)
+        attn_scores = torch.matmul(q_seq, k_seq.transpose(-2, -1)) / (self.head_dim ** 0.5)
+
         if attention_mask is not None:
             attn_scores = attn_scores + attention_mask
-        
-        # Softmax and dropout
+
+        # Softmax over key dimension and dropout
         attn_weights = F.softmax(attn_scores, dim=-1)
         attn_weights = self.dropout(attn_weights)
-        
-        # Apply attention to values
-        attn_out = torch.matmul(attn_weights, v)  # (B, H, 1, D)
-        
-        # Reshape back
-        attn_out = attn_out.transpose(1, 2).contiguous().view(batch_size, 1, self.dim)
-        
+
+        # Apply attention to values: (B, H, 2, head_dim)
+        attn_out = torch.matmul(attn_weights, v_seq)
+
+        # Take only the query token (index 0) output: (B, H, head_dim)
+        # Merge heads back: (B, H, head_dim) -> (B, H*head_dim) == (B, dim)
+        attn_out = attn_out[:, :, 0, :].contiguous().view(batch_size, self.dim)
+
         # Output projection
-        attn_out = self.out_proj(attn_out.squeeze(1))  # (B, dim)
-        
+        attn_out = self.out_proj(attn_out)  # (B, dim)
+
         # Residual connection + layer norm
         out = self.layer_norm(query + attn_out)
-        
+
         return out
 
 
@@ -692,7 +704,7 @@ def get_triple_branch_fusion(
     num_classes: int = 2,
     swin_variant: str = 'small',
     convnext_variant: str = 'small',
-    efficientnet_variant: str = 'b3',
+    efficientnet_variant: str = 'b5',  # ⭐ Upgraded default — B5 (2048-dim) vs B3 (1536-dim)
     dropout: float = 0.3,
     fusion_dim: int = 768,
     num_heads: int = 8,

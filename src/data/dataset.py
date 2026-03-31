@@ -67,26 +67,34 @@ class BreakHisDataset(Dataset):
         return image, int(label)
 
 def get_transforms():
-    """Returns train and validation/test transforms."""
-    # Using robust augmentations for medical images as discussed
+    """Returns train and validation/test transforms.
+
+    Train augmentations are designed for histopathology:
+      - Flips/rotations: staining orientation is irrelevant
+      - ColorJitter: handles stain variation across slides
+      - RandomAffine: mimics slight tissue section misalignments
+      - RandomErasing: cutout-style regularization for occlusion robustness
+    """
     train_transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.RandomHorizontalFlip(),
         transforms.RandomVerticalFlip(),
         transforms.RandomRotation(20),
-        transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.05),
+        transforms.RandomAffine(degrees=0, translate=(0.05, 0.05), scale=(0.95, 1.05)),
+        transforms.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.1, hue=0.05),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406],  # ImageNet stats
-                             std=[0.229, 0.224, 0.225])
+        transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                             std=[0.229, 0.224, 0.225]),
+        transforms.RandomErasing(p=0.1, scale=(0.02, 0.1), ratio=(0.3, 3.3)),
     ])
-    
+
     val_test_transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406],
                              std=[0.229, 0.224, 0.225])
     ])
-    
+
     return train_transform, val_test_transform
 
 
@@ -316,23 +324,54 @@ def get_kfold_splits(data_dir, task="binary", n_folds=5, batch_size=32,
     # ── K-Fold on train+val pool ──
     train_tf, val_tf = get_transforms()
 
-    if StratifiedGroupKFold is not None:
-        splitter = StratifiedGroupKFold(n_splits=n_folds, shuffle=True, random_state=seed)
-        split_iter = splitter.split(
-            df_trainval,
-            df_trainval['label'],
-            groups=df_trainval['patient_id'],
-        )
-    else:
-        print("Warning: StratifiedGroupKFold not available; falling back to GroupKFold.")
-        splitter = GroupKFold(n_splits=n_folds)
-        split_iter = splitter.split(
-            df_trainval,
-            df_trainval['label'],
-            groups=df_trainval['patient_id'],
-        )
+    # Overall class ratio used as reference for balance checking
+    overall_ratio = df_trainval['label'].value_counts(normalize=True).sort_index()
+    MAX_RATIO_DEVIATION = 0.15  # Allow up to ±15% deviation from overall ratio
+    MAX_RESHUFFLE_ATTEMPTS = 5
 
-    for fold_idx, (train_idx, val_idx) in enumerate(split_iter):
+    def _get_split_iter(splitter_seed):
+        """Build a fresh split iterator with the given seed."""
+        if StratifiedGroupKFold is not None:
+            sp = StratifiedGroupKFold(n_splits=n_folds, shuffle=True, random_state=splitter_seed)
+            return list(sp.split(df_trainval, df_trainval['label'], groups=df_trainval['patient_id']))
+        else:
+            print("Warning: StratifiedGroupKFold not available; falling back to GroupKFold.")
+            sp = GroupKFold(n_splits=n_folds)
+            return list(sp.split(df_trainval, df_trainval['label'], groups=df_trainval['patient_id']))
+
+    def _check_fold_balance(split_list):
+        """Return True if all folds have acceptable class balance."""
+        for _, val_idx in split_list:
+            val_labels = df_trainval.iloc[val_idx]['label']
+            fold_ratio = val_labels.value_counts(normalize=True).sort_index()
+            # Ensure both classes are represented
+            if len(fold_ratio) < len(overall_ratio):
+                return False
+            # Check deviation from overall ratio
+            for cls in overall_ratio.index:
+                if cls not in fold_ratio.index:
+                    return False
+                deviation = abs(fold_ratio.get(cls, 0.0) - overall_ratio[cls])
+                if deviation > MAX_RATIO_DEVIATION:
+                    return False
+        return True
+
+    # Try to find a balanced set of splits
+    current_seed = seed
+    splits = _get_split_iter(current_seed)
+    for attempt in range(MAX_RESHUFFLE_ATTEMPTS):
+        if _check_fold_balance(splits):
+            break
+        print(f"  ⚠ Fold balance check failed (attempt {attempt + 1}), reshuffling with seed={current_seed + attempt + 1}...")
+        current_seed = current_seed + attempt + 1
+        splits = _get_split_iter(current_seed)
+    else:
+        print("  ⚠ Could not achieve balanced folds after max attempts — using best available split.")
+
+    if current_seed != seed:
+        print(f"  ✓ Balanced folds found using seed={current_seed}")
+
+    for fold_idx, (train_idx, val_idx) in enumerate(splits):
         df_train = df_trainval.iloc[train_idx].reset_index(drop=True)
         df_val = df_trainval.iloc[val_idx].reset_index(drop=True)
 
@@ -341,7 +380,14 @@ def get_kfold_splits(data_dir, task="binary", n_folds=5, batch_size=32,
         fold_val_p = set(df_val['patient_id'])
         assert len(fold_train_p & fold_val_p) == 0, f"Leakage in fold {fold_idx}!"
 
-        print(f"Fold {fold_idx + 1}/{n_folds} — Train: {len(df_train)} | Val: {len(df_val)}")
+        # Compute and display class balance diagnostics
+        val_ratio = df_val['label'].value_counts(normalize=True).sort_index()
+        balance_ok = all(
+            abs(val_ratio.get(cls, 0.0) - overall_ratio[cls]) <= MAX_RATIO_DEVIATION
+            for cls in overall_ratio.index
+        )
+        balance_tag = "✓" if balance_ok else "⚠ IMBALANCED"
+        print(f"Fold {fold_idx + 1}/{n_folds} — Train: {len(df_train)} | Val: {len(df_val)} [{balance_tag}]")
         print(f"  Train labels: {df_train['label'].value_counts().sort_index().to_dict()}")
         print(f"  Val labels:   {df_val['label'].value_counts().sort_index().to_dict()}")
 

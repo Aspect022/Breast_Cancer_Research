@@ -26,10 +26,10 @@ data:
 cv:
   n_folds: 5  # 5-fold cross-validation for research-grade results
 
-# ── Training (shared defaults) ──────────────────────────────────
+# ── Training (shared defaults) ────────────────────────────────────────────────
 training:
   epochs: 50  # Full training epochs for research-grade results
-  patience: 10  # Early stopping patience (monitors val AUC)
+  patience: 15  # ⭐ Increased from 10 — gives cosine LR more room before stopping
   grad_clip: 1.0  # Gradient clipping max norm (0 = disabled)
 
 # ── Models to Run ───────────────────────────────────────────────
@@ -199,54 +199,102 @@ models:
   triple_branch_fusion:
     enabled: true  # ENABLED for training with B5
     batch_size: 10  # Reduced for B5 (uses more memory)
-    lr: 1.0e-5  # Lower LR for B5
+    lr: 5.0e-5  # ⭐ Raised from 1e-5 (was decaying to near-zero by ep 15)
     weight_decay: 1.0e-4
     use_amp: true
-    swin_variant: "small"  # Options: tiny, small, v2_small
-    convnext_variant: "small"  # Options: tiny, small, base
-    efficientnet_variant: "b5"  # ⭐ UPGRADED TO B5
+    swin_variant: "small"
+    convnext_variant: "small"
+    efficientnet_variant: "b5"  # ⭐ B5 (2048-dim) for all TBCA models
     dropout: 0.3
     fusion_dim: 768
     num_heads: 8
     entropy_weight: 0.01
+    warmup_epochs: 3  # ⭐ Stabilises multi-branch gradient flow at start
 
   # 14b. TBCA-Fusion with Quantum Fusion (Placement 3) ⭐
   triple_branch_fusion_quantum:
-    enabled: true  # ⭐ ENABLED for quantum fusion testing
+    enabled: true
     batch_size: 10
-    lr: 1.0e-5
+    lr: 5.0e-5  # ⭐ Raised from 1e-5
     weight_decay: 1.0e-4
     use_amp: true
     swin_variant: "small"
     convnext_variant: "small"
-    efficientnet_variant: "b5"
+    efficientnet_variant: "b5"  # ⭐ B5 everywhere
     dropout: 0.3
     fusion_dim: 768
     num_heads: 8
     entropy_weight: 0.01
-    use_quantum_fusion: true  # ⭐ Placement 3
+    use_quantum_fusion: true
     use_quantum_bottleneck: false
     quantum_n_qubits: 8
     quantum_n_layers: 2
+    warmup_epochs: 3  # ⭐ Warmup for stability
 
   # 14c. TBCA-Fusion with Quantum Bottleneck (Placement 2)
   triple_branch_fusion_bottleneck:
-    enabled: true  # ⭐ ENABLED for quantum bottleneck testing
+    enabled: true
     batch_size: 10
-    lr: 1.0e-5
+    lr: 5.0e-5  # ⭐ Raised from 1e-5
     weight_decay: 1.0e-4
     use_amp: true
     swin_variant: "small"
     convnext_variant: "small"
-    efficientnet_variant: "b5"
+    efficientnet_variant: "b5"  # ⭐ B5 everywhere
     dropout: 0.3
     fusion_dim: 768
     num_heads: 8
     entropy_weight: 0.01
     use_quantum_fusion: false
-    use_quantum_bottleneck: true  # ⭐ Placement 2
+    use_quantum_bottleneck: true
     quantum_n_qubits: 8
     quantum_n_layers: 2
+    warmup_epochs: 3  # ⭐ Warmup for stability
+
+  # TBCA CNN FeatureMap Quantum
+  triple_branch_fusion_cnn_featuremap_quantum:
+    enabled: true
+    batch_size: 10
+    lr: 5.0e-5  # ⭐ Raised from 1e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    swin_variant: "small"
+    convnext_variant: "small"
+    efficientnet_variant: "b5"  # ⭐ B5 everywhere
+    dropout: 0.3
+    fusion_dim: 768
+    num_heads: 8
+    entropy_weight: 0.01
+    quantum_n_qubits: 8
+    quantum_n_layers: 2
+    quantum_rotation_config: "u3"
+    quantum_entanglement: "cyclic"
+    quantum_feature_map_mode: "cnn"
+    warmup_epochs: 3
+
+  # TBCA ViT FeatureMap Quantum
+  triple_branch_fusion_vit_featuremap_quantum:
+    enabled: true
+    batch_size: 10
+    lr: 5.0e-5  # ⭐ Raised from 1e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    swin_variant: "small"
+    convnext_variant: "small"
+    efficientnet_variant: "b5"  # ⭐ B5 everywhere
+    dropout: 0.3
+    fusion_dim: 768
+    num_heads: 8
+    entropy_weight: 0.01
+    quantum_n_qubits: 8
+    quantum_n_layers: 2
+    quantum_rotation_config: "u3"
+    quantum_entanglement: "cyclic"
+    quantum_feature_map_mode: "vit"
+    vit_d_model: 256
+    vit_num_heads: 4
+    vit_num_layers: 2
+    warmup_epochs: 3
 
   # 15. Class-Balanced Quantum-Classical Fusion (CB-QCCF)
   # Reference: PROPOSED_ARCHITECTURES.md - Architecture 3, QUANTUM_ARCHITECTURES.md

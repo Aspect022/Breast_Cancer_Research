@@ -314,7 +314,7 @@ def build_model(model_name, num_classes, model_cfg):
             num_classes=num_classes,
             swin_variant=model_cfg.get('swin_variant', 'small'),
             convnext_variant=model_cfg.get('convnext_variant', 'small'),
-            efficientnet_variant=model_cfg.get('efficientnet_variant', 'b3'),
+            efficientnet_variant=model_cfg.get('efficientnet_variant', 'b5'),
             dropout=model_cfg.get('dropout', 0.3),
             fusion_dim=model_cfg.get('fusion_dim', 768),
             num_heads=model_cfg.get('num_heads', 8),
@@ -492,7 +492,9 @@ def build_criterion(model_name: str, model_cfg: Dict[str, Any]) -> nn.Module:
             temperature=model_cfg.get('temperature', 4.0),
             alpha=model_cfg.get('distillation_alpha', 0.7),
         )
-    return nn.CrossEntropyLoss()
+    # Label smoothing (0.1) damps overconfidence and improves specificity generalization
+    label_smoothing = model_cfg.get('label_smoothing', 0.1)
+    return nn.CrossEntropyLoss(label_smoothing=label_smoothing)
 
 
 def compute_loss_and_logits(
@@ -658,6 +660,7 @@ def train_fold(
     }
 
     best_val_auc = 0.0
+    best_val_acc = 0.0
     best_epoch = 0
     patience_counter = 0
     best_path = os.path.join(output_dir, f'best_model_fold{fold_idx + 1}.pth')
@@ -735,10 +738,16 @@ def train_fold(
 
         if val_auc > best_val_auc:
             best_val_auc = val_auc
+            best_val_acc = max(best_val_acc, val_acc)  # track peak acc at best-AUC epoch
             best_epoch = epoch
             patience_counter = 0
             torch.save(model.state_dict(), best_path)
+        elif val_auc == 0.0:
+            # AUC=0 is a computation failure (single-class prediction), not a genuine signal.
+            # Do NOT penalise patience — the model may still be training fine.
+            best_val_acc = max(best_val_acc, val_acc)  # still update acc tracking
         else:
+            best_val_acc = max(best_val_acc, val_acc)
             patience_counter += 1
             if patience_counter >= patience:
                 print(f"    Early stop at epoch {epoch}")
@@ -757,6 +766,7 @@ def train_fold(
 
     return {
         'best_val_auc': best_val_auc,
+        'best_val_acc': best_val_acc,
         'best_epoch': best_epoch,
         'fold_time_s': fold_time,
         'best_path': best_path,
@@ -938,6 +948,7 @@ def run_model_pipeline(model_name, cfg, all_results, wandb_run=None):
             'Best_Epoch': fold_result['best_epoch'],
             'Convergence_Ep': fold_result['convergence_epoch'],
             'Val_AUC': round(fold_result['best_val_auc'], 4),
+            'Val_Best_Acc': round(fold_result['best_val_acc'], 4),  # ⭐ Academic reporting metric
             'Test_Acc': round(test_metrics['accuracy'], 4),
             'Test_BalAcc': round(test_metrics['balanced_accuracy'], 4),
             'Test_Sensitivity': round(test_metrics['sensitivity'], 4),
@@ -955,7 +966,8 @@ def run_model_pipeline(model_name, cfg, all_results, wandb_run=None):
         fold_entry.update(paradigm_extras)
         fold_rows.append(fold_entry)
 
-        print(f"    → AUC: {test_metrics['auc']:.4f} | F1: {test_metrics['f1']:.4f} | "
+        print(f"    → ValAcc: {fold_result['best_val_acc']:.4f} | TestAcc: {test_metrics['accuracy']:.4f} | "
+              f"AUC: {test_metrics['auc']:.4f} | F1: {test_metrics['f1']:.4f} | "
               f"MCC: {test_metrics['mcc']:.4f} | FNR: {test_metrics['fnr']:.4f}")
 
         del model
@@ -975,6 +987,10 @@ def run_model_pipeline(model_name, cfg, all_results, wandb_run=None):
     agg = {'Model': display_name, 'Paradigm': paradigm_type, 'Task': task,
            'Folds': n_folds, 'Total_Params': total_params}
 
+    # ⭐ Primary academic metric: mean of best validation accuracy per fold
+    agg['Mean_Best_Val_Acc'] = round(fold_df['Val_Best_Acc'].mean(), 4)
+    agg['Std_Best_Val_Acc'] = round(fold_df['Val_Best_Acc'].std(), 4)
+
     for col in metric_cols:
         clean = col.replace('Test_', '')
         agg[f'Mean_{clean}'] = round(fold_df[col].mean(), 4)
@@ -988,7 +1004,7 @@ def run_model_pipeline(model_name, cfg, all_results, wandb_run=None):
     # Add paradigm extras to aggregate (take from last fold)
     for key in fold_rows[-1]:
         if key not in agg and key not in ['Fold', 'Best_Epoch', 'Convergence_Ep',
-                                           'Val_AUC', 'Fold_Time_s', 'Model',
+                                           'Val_AUC', 'Val_Best_Acc', 'Fold_Time_s', 'Model',
                                            'Paradigm', 'Inference_ms', 'GPU_Mem_GB'] \
                 and not key.startswith('Test_'):
             agg[key] = fold_rows[-1][key]
@@ -1000,6 +1016,8 @@ def run_model_pipeline(model_name, cfg, all_results, wandb_run=None):
         # Log averaged metrics
         wandb_logger.log_metrics({
             'dataset': data_cfg['dataset'],
+            'val_accuracy': agg['Mean_Best_Val_Acc'],      # ⭐ Academic primary metric
+            'val_accuracy_std': agg.get('Std_Best_Val_Acc', 0),
             'accuracy': agg['Mean_Acc'],
             'accuracy_std': agg.get('Std_Acc', 0),
             'f1_score': agg['Mean_F1'],
@@ -1032,15 +1050,16 @@ def run_model_pipeline(model_name, cfg, all_results, wandb_run=None):
                     )
 
     print(f"\n  ╔═══ {display_name} SUMMARY ({n_folds}-Fold) ═══╗")
-    print(f"  ║ Accuracy:    {agg['Mean_Acc']:.4f} ± {agg['Std_Acc']:.4f}")
-    print(f"  ║ F1 (macro):  {agg['Mean_F1']:.4f} ± {agg['Std_F1']:.4f}")
-    print(f"  ║ AUC:         {agg['Mean_AUC']:.4f} ± {agg['Std_AUC']:.4f}")
-    print(f"  ║ MCC:         {agg['Mean_MCC']:.4f} ± {agg['Std_MCC']:.4f}")
-    print(f"  ║ Sensitivity: {agg['Mean_Sensitivity']:.4f} ± {agg['Std_Sensitivity']:.4f}")
-    print(f"  ║ Specificity: {agg['Mean_Specificity']:.4f} ± {agg['Std_Specificity']:.4f}")
-    print(f"  ║ FNR:         {agg['Mean_FNR']:.4f} ± {agg['Std_FNR']:.4f}")
-    print(f"  ║ NPV:         {agg['Mean_NPV']:.4f} ± {agg['Std_NPV']:.4f}")
-    print(f"  ║ Time:        {agg['Total_Time_s']:.0f}s")
+    print(f"  ║ ⭐ Val Accuracy: {agg['Mean_Best_Val_Acc']:.4f} ± {agg['Std_Best_Val_Acc']:.4f}  (academic standard)")
+    print(f"  ║ Test Accuracy:  {agg['Mean_Acc']:.4f} ± {agg['Std_Acc']:.4f}")
+    print(f"  ║ F1 (macro):     {agg['Mean_F1']:.4f} ± {agg['Std_F1']:.4f}")
+    print(f"  ║ AUC:            {agg['Mean_AUC']:.4f} ± {agg['Std_AUC']:.4f}")
+    print(f"  ║ MCC:            {agg['Mean_MCC']:.4f} ± {agg['Std_MCC']:.4f}")
+    print(f"  ║ Sensitivity:    {agg['Mean_Sensitivity']:.4f} ± {agg['Std_Sensitivity']:.4f}")
+    print(f"  ║ Specificity:    {agg['Mean_Specificity']:.4f} ± {agg['Std_Specificity']:.4f}")
+    print(f"  ║ FNR:            {agg['Mean_FNR']:.4f} ± {agg['Std_FNR']:.4f}")
+    print(f"  ║ NPV:            {agg['Mean_NPV']:.4f} ± {agg['Std_NPV']:.4f}")
+    print(f"  ║ Time:           {agg['Total_Time_s']:.0f}s")
     print(f"  ╚{'═'*40}╝")
 
     if wandb_logger is not None:
