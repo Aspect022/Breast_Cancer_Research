@@ -634,6 +634,14 @@ def evaluate(model, loader, criterion, device, use_amp=True, model_name=''):
 
 
 def compute_val_auc(val_labels, val_probs, num_classes):
+    """
+    Compute validation AUC robustly.
+
+    For multiclass: uses only the classes actually present in val_labels
+    (OVR AUC is undefined for classes with no positive samples in val).
+    This prevents permanent AUC=0 when rare subtypes are missing from a
+    patient-grouped validation fold.
+    """
     try:
         if len(np.unique(val_labels)) < 2:
             return 0.0
@@ -641,10 +649,21 @@ def compute_val_auc(val_labels, val_probs, num_classes):
         if num_classes == 2:
             return float(np.nan_to_num(roc_auc_score(val_labels, val_probs[:, 1])))
         else:
+            # Only score the classes that actually appear in this val fold.
+            # Missing classes get no contribution to the macro average.
+            present = np.unique(val_labels).tolist()
+            if len(present) < 2:
+                return 0.0
             return float(np.nan_to_num(
-                roc_auc_score(val_labels, val_probs, multi_class='ovr', average='macro')
+                roc_auc_score(
+                    val_labels,
+                    val_probs[:, present],   # keep only columns for present classes
+                    multi_class='ovr',
+                    average='macro',
+                    labels=present,          # explicitly tell sklearn which classes
+                )
             ))
-    except ValueError:
+    except (ValueError, IndexError):
         return 0.0
 
 
@@ -716,6 +735,11 @@ def train_fold(
         val_metrics = compute_metrics(val_labels, val_probs, num_classes)
         val_auc = val_metrics['auc']
 
+        # For multiclass with rare subtypes, some val folds may be missing classes,
+        # making OVR-AUC undefined early in training.  Fall back to val_acc so
+        # early-stopping and checkpoint logic remain functional.
+        val_primary = val_auc if val_auc > 0.0 else val_acc
+
         if epoch > warmup_epochs:
             scheduler.step()
         current_lr = optimizer.param_groups[0]['lr']
@@ -731,6 +755,7 @@ def train_fold(
             f"    Ep {epoch:02d}/{epochs} | "
             f"T-Acc: {train_acc:.4f} | V-Acc: {val_acc:.4f} AUC: {val_auc:.4f} | "
             f"LR: {current_lr:.6f}"
+            + (" [acc-mode]" if val_auc == 0.0 else "")
         )
 
         # Log to W&B
@@ -757,7 +782,7 @@ def train_fold(
                     'val/balanced_accuracy': val_metrics['balanced_accuracy'],
                 },
             )
-            
+
             # Log weights and biases periodically (only for first fold to avoid spam)
             if fold_idx == 0 and wandb_logger.wandb_cfg.get('log_weights', True):
                 wandb_logger.log_weights_and_biases(
@@ -766,26 +791,27 @@ def train_fold(
                     log_interval=5,
                 )
 
-        if val_auc > best_val_auc:
-            best_val_auc = val_auc
-            best_val_acc = max(best_val_acc, val_acc)  # track peak acc at best-AUC epoch
+        # ── Checkpoint & early-stopping on val_primary (AUC, or acc fallback) ──
+        if val_primary > best_val_auc:
+            best_val_auc = val_primary
+            best_val_acc = max(best_val_acc, val_acc)
             best_epoch = epoch
             patience_counter = 0
             torch.save(model.state_dict(), best_path)
-        elif val_auc == 0.0:
-            # AUC=0 is a computation failure (single-class prediction), not a genuine signal.
-            # Do NOT penalise patience — the model may still be training fine.
-            best_val_acc = max(best_val_acc, val_acc)  # still update acc tracking
         else:
             best_val_acc = max(best_val_acc, val_acc)
             patience_counter += 1
             if patience_counter >= patience:
                 print(f"    Early stop at epoch {epoch}")
-                # Ensure we have a saved model
                 if not os.path.exists(best_path):
-                    print(f"    Saving final model...")
                     torch.save(model.state_dict(), best_path)
                 break
+
+    # ── Safety net: guarantee checkpoint always exists ──
+    # (protects against edge cases: all-zero AUC, no improvement, short runs)
+    if not os.path.exists(best_path):
+        print(f"    ⚠ No checkpoint saved during training — saving final weights.")
+        torch.save(model.state_dict(), best_path)
 
     fold_time = time.time() - fold_start
     convergence = get_convergence_epoch(history)
