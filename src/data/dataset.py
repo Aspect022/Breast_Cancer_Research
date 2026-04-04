@@ -23,6 +23,22 @@ def set_seed(seed=42):
     torch.backends.cudnn.benchmark = False
 
 
+def compute_class_weights(labels, num_classes):
+    """
+    Compute inverse-frequency class weights for handling imbalanced subtypes.
+
+    Returns a FloatTensor of shape (num_classes,) suitable for
+    nn.CrossEntropyLoss(weight=...).
+    """
+    counts = np.bincount(np.asarray(labels, dtype=int), minlength=num_classes).astype(float)
+    # Avoid division by zero for missing classes
+    counts = np.where(counts == 0, 1.0, counts)
+    weights = 1.0 / counts
+    # Normalize so weights sum to num_classes (keeps loss scale comparable)
+    weights = weights / weights.sum() * num_classes
+    return torch.FloatTensor(weights)
+
+
 # ─────────────────────────────────────────────
 # Multi-Dataset Support
 # ─────────────────────────────────────────────
@@ -136,77 +152,126 @@ def stratified_group_holdout_split(
     test_idx = np.where(test_mask)[0]
     return train_idx, test_idx
 
+# ─────────────────────────────────────────────
+# BreakHis 8-Class Subtype Mapping
+# ─────────────────────────────────────────────
+# Maps folder name substrings → integer label (0-7)
+# Source: BreakHis directory structure:
+#   benign/SOB/{adenosis, fibroadenoma, phyllodes_tumor, tubular_adenoma}
+#   malignant/SOB/{ductal_carcinoma, lobular_carcinoma, mucinous_carcinoma, papillary_carcinoma}
+
+BREAKHIS_8CLASS_MAP = {
+    # Benign subtypes (labels 0-3)
+    'adenosis':          0,
+    'fibroadenoma':      1,
+    'phyllodes_tumor':   2,
+    'tubular_adenoma':   3,
+    # Malignant subtypes (labels 4-7)
+    'ductal_carcinoma':  4,
+    'lobular_carcinoma': 5,
+    'mucinous_carcinoma': 6,
+    'papillary_carcinoma': 7,
+}
+
+BREAKHIS_8CLASS_NAMES = [
+    'Adenosis',          # 0 — Benign
+    'Fibroadenoma',      # 1 — Benign
+    'Phyllodes',         # 2 — Benign
+    'Tubular_Adenoma',   # 3 — Benign
+    'Ductal_Carcinoma',  # 4 — Malignant
+    'Lobular_Carcinoma', # 5 — Malignant
+    'Mucinous_Carcinoma',# 6 — Malignant
+    'Papillary_Carcinoma',# 7 — Malignant
+]
+
+
+def _infer_8class_label_from_path(path_str: str) -> int:
+    """
+    Infer the 8-class BreakHis subtype label from the directory path.
+
+    Uses the subfolder name (e.g. 'ductal_carcinoma') which is far more
+    reliable than filename acronym matching, since the folder names are
+    standardized in the official BreakHis release.
+
+    Returns integer label 0-7, or -1 if subtype cannot be determined.
+    """
+    norm = path_str.replace("\\", "/").lower()
+    for folder_key, label in BREAKHIS_8CLASS_MAP.items():
+        if f"/{folder_key}/" in norm:
+            return label
+    return -1
+
+
 def parse_breakhis_directory(data_dir, task="binary"):
     """
     Walks the BreakHis directory and extracts paths, labels, and patient IDs.
-    task: "binary" (Benign vs Malignant) or "multi" (IDC, ILC, Fibroadenoma).
+
+    Args:
+        data_dir: Root of the BreaKHis_v1 dataset.
+        task: "binary" (Benign=0 vs Malignant=1) or
+              "multi"  (8-class subtype, labels 0-7 per BREAKHIS_8CLASS_MAP).
+
+    Returns:
+        pd.DataFrame with columns ['path', 'label', 'patient_id'].
     """
     paths = []
     labels = []
     patient_ids = []
-    
-    # Standard classes for 3-class targeted task
-    multi_target_map = {
-        'IDC': 0, # Invasive Ductal Carcinoma
-        'ILC': 1, # Invasive Lobular Carcinoma
-        'F': 2    # Fibroadenoma
-    }
 
     for root, _, files in os.walk(data_dir):
         for file in files:
-            if file.lower().endswith('.png'):
-                full_path = os.path.join(root, file)
-                
-                # Extract metadata from path
-                # Example path segment: .../malignant/SOB/ductal_carcinoma/SOB_M_DC_14-11031/...
-                # Note: BreakHis file/folder naming conventions vary slightly, 
-                # but Patient ID usually takes the form SOB_B_F_14-14134 
-                
-                parts = full_path.replace("\\", "/").split('/')
-                
-                # Infer binary class
-                if 'benign' in full_path.lower():
-                    binary_label = 0
-                elif 'malignant' in full_path.lower():
-                    binary_label = 1
-                else:
-                    continue # Skip if cant determine
-                    
-                # Infer specific type for multi-class
-                # The tumor type is usually represented by acronyms in the filename (e.g., SOB_M_DC)
-                # or in the folder structure (e.g. ductal_carcinoma)
-                file_upper = file.upper()
-                multi_label = -1
-                if 'DC' in file_upper: # Ductal Carcinoma
-                    multi_label = multi_target_map['IDC']
-                elif 'LC' in file_upper: # Lobular Carcinoma
-                    multi_label = multi_target_map['ILC']
-                elif '_F_' in file_upper: # Fibroadenoma
-                    multi_label = multi_target_map['F']
-                
-                # Extract patient ID (usually the 3rd element in the hyphenated filename or folder)
-                # e.g., SOB_M_DC_14-9461_100X_... -> Patient ID is '14-9461'
-                try:
-                    patient_id = file.split('_')[3] # Assuming standard format
-                except IndexError:
-                    # Fallback if filename format is unexpected
-                    patient_id = os.path.basename(os.path.dirname(os.path.dirname(full_path)))
-                
-                if task == "binary":
-                    paths.append(full_path)
-                    labels.append(binary_label)
-                    patient_ids.append(patient_id)
-                elif task == "multi" and multi_label != -1: # Only include if it's one of the 3 target classes
-                    paths.append(full_path)
-                    labels.append(multi_label)
-                    patient_ids.append(patient_id)
-                    
+            if not file.lower().endswith('.png'):
+                continue
+
+            full_path = os.path.join(root, file)
+            norm_path = full_path.replace("\\", "/").lower()
+
+            # ── Binary label from path ──────────────────────────────────
+            if 'benign' in norm_path:
+                binary_label = 0
+            elif 'malignant' in norm_path:
+                binary_label = 1
+            else:
+                continue  # Cannot determine class — skip
+
+            # ── Extract patient ID from filename ─────────────────────────
+            # Standard BreakHis filename format:
+            #   SOB_M_DC_14-9461_100X_00001.png  →  patient_id = '14-9461'
+            try:
+                patient_id = file.split('_')[3]
+            except IndexError:
+                # Fallback: use the patient-folder name (2 levels up from magnification)
+                patient_id = os.path.basename(
+                    os.path.dirname(os.path.dirname(full_path))
+                )
+
+            if task == "binary":
+                paths.append(full_path)
+                labels.append(binary_label)
+                patient_ids.append(patient_id)
+
+            elif task == "multi":
+                # ── 8-class label from folder structure ─────────────────
+                multi_label = _infer_8class_label_from_path(full_path)
+                if multi_label == -1:
+                    continue  # Subtype folder not recognized — skip
+                paths.append(full_path)
+                labels.append(multi_label)
+                patient_ids.append(patient_id)
+
     df = pd.DataFrame({
         'path': paths,
         'label': labels,
-        'patient_id': patient_ids
+        'patient_id': patient_ids,
     })
-    
+
+    if len(df) == 0:
+        raise ValueError(
+            f"No images found in '{data_dir}' for task='{task}'. "
+            "Check that data_dir points to the BreaKHis_v1 root and that "
+            "the folder structure matches the standard BreakHis layout."
+        )
+
     return df
 
 def get_dataloaders(data_dir, task="binary", batch_size=32, subset_size=None, num_workers=4):

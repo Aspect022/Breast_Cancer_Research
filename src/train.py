@@ -42,7 +42,16 @@ from src.utils.metrics import (
 
 TASK_CLASS_NAMES = {
     'binary': ['Benign', 'Malignant'],
-    'multi': ['IDC', 'ILC', 'Fibroadenoma']
+    'multi': [
+        'Adenosis',           # 0 — Benign
+        'Fibroadenoma',       # 1 — Benign
+        'Phyllodes',          # 2 — Benign
+        'Tubular_Adenoma',    # 3 — Benign
+        'Ductal_Carcinoma',   # 4 — Malignant
+        'Lobular_Carcinoma',  # 5 — Malignant
+        'Mucinous_Carcinoma', # 6 — Malignant
+        'Papillary_Carcinoma',# 7 — Malignant
+    ],
 }
 
 

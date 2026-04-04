@@ -258,22 +258,34 @@ def plot_training_curves(history, output_dir, task_name):
 
 def plot_confusion_matrix(cm, class_names, output_dir, task_name):
     """Plot both raw count and normalized confusion matrices."""
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    n = cm.shape[0]
+    cell_size = 1.8 if n <= 4 else (1.4 if n <= 8 else 1.2)
+    fig_w = max(10, int(n * cell_size * 2 + 2))
+    fig_h = max(5,  int(n * cell_size + 1))
+    font_size = max(7, 12 - n // 3)
+
+    fig, axes = plt.subplots(1, 2, figsize=(fig_w, fig_h))
 
     # Raw counts
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
-                xticklabels=class_names, yticklabels=class_names, ax=axes[0])
-    axes[0].set_title(f'{task_name} — CM (Counts)', fontsize=13)
+                xticklabels=class_names, yticklabels=class_names, ax=axes[0],
+                annot_kws={'size': font_size})
+    axes[0].set_title(f'{task_name} - CM (Counts)', fontsize=13)
     axes[0].set_xlabel('Predicted')
     axes[0].set_ylabel('True')
+    plt.setp(axes[0].get_xticklabels(), rotation=45, ha='right', fontsize=font_size)
+    plt.setp(axes[0].get_yticklabels(), rotation=0,  fontsize=font_size)
 
     # Normalized
     cm_norm = cm.astype('float') / cm.sum(axis=1, keepdims=True)
     sns.heatmap(cm_norm, annot=True, fmt='.2%', cmap='Blues',
-                xticklabels=class_names, yticklabels=class_names, ax=axes[1])
-    axes[1].set_title(f'{task_name} — CM (Normalized)', fontsize=13)
+                xticklabels=class_names, yticklabels=class_names, ax=axes[1],
+                annot_kws={'size': font_size})
+    axes[1].set_title(f'{task_name} - CM (Normalized)', fontsize=13)
     axes[1].set_xlabel('Predicted')
     axes[1].set_ylabel('True')
+    plt.setp(axes[1].get_xticklabels(), rotation=45, ha='right', fontsize=font_size)
+    plt.setp(axes[1].get_yticklabels(), rotation=0,  fontsize=font_size)
 
     plt.tight_layout()
     path = os.path.join(output_dir, f'{task_name}_confusion_matrix.png')
@@ -305,7 +317,8 @@ def plot_roc_curve(y_true, y_probs, num_classes, class_names, output_dir, task_n
     ax.set_xlabel('False Positive Rate')
     ax.set_ylabel('True Positive Rate')
     ax.set_title(f'{task_name} — ROC Curve', fontsize=13)
-    ax.legend(loc='lower right')
+    legend_fontsize = 8 if num_classes > 4 else 10
+    ax.legend(loc='lower right', fontsize=legend_fontsize)
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
     path = os.path.join(output_dir, f'{task_name}_roc_curve.png')
@@ -316,6 +329,47 @@ def plot_roc_curve(y_true, y_probs, num_classes, class_names, output_dir, task_n
 
 
 # ═══════════════════════════════════════════════
+
+
+def plot_per_class_metrics(metrics, class_names, output_dir, task_name):
+    """
+    Bar chart of per-class F1, Sensitivity (Recall), and Specificity.
+    Only meaningful for multiclass (num_classes > 2).
+    """
+    f1_vals  = metrics.get('f1_per_class', [])
+    rec_vals = metrics.get('recall_per_class', [])
+    spe_vals = metrics.get('specificity_per_class', [])
+
+    if not len(f1_vals):
+        return None
+
+    n = len(f1_vals)
+    x = np.arange(n)
+    width = 0.25
+
+    fig, ax = plt.subplots(figsize=(max(10, n * 1.6), 5))
+    ax.bar(x - width, f1_vals,  width, label='F1',          color='steelblue',   alpha=0.85)
+    ax.bar(x,         rec_vals, width, label='Sensitivity', color='forestgreen', alpha=0.85)
+    ax.bar(x + width, spe_vals, width, label='Specificity', color='tomato',      alpha=0.85)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(
+        class_names if class_names else [f'Class {i}' for i in range(n)],
+        rotation=30, ha='right',
+    )
+    ax.set_ylim(0, 1.05)
+    ax.set_ylabel('Score')
+    ax.set_title(f'{task_name} - Per-Class Metrics', fontsize=13)
+    ax.legend()
+    ax.grid(axis='y', alpha=0.3)
+    plt.tight_layout()
+
+    path = os.path.join(output_dir, f'{task_name}_per_class_metrics.png')
+    plt.savefig(path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"Saved: {path}")
+    return path
+
 # IV. COMPUTATIONAL METRICS
 # ═══════════════════════════════════════════════
 

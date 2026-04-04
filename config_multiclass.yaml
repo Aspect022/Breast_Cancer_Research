@@ -1,0 +1,382 @@
+# ══════════════════════════════════════════════════════════════════
+# Breast Cancer Histopathology — MULTICLASS (8-Class) Configuration
+# ══════════════════════════════════════════════════════════════════
+# Task:    8-class BreakHis subtype classification
+# Classes: Adenosis | Fibroadenoma | Phyllodes | Tubular_Adenoma
+#          Ductal_Carcinoma | Lobular_Carcinoma | Mucinous_Carcinoma | Papillary_Carcinoma
+#
+# Usage:   python run_pipeline.py --config config_multiclass.yaml
+#          python run_pipeline.py --config config_multiclass.yaml --models efficientnet swin_tiny
+# ══════════════════════════════════════════════════════════════════
+
+# ── Dataset ──────────────────────────────────────────────────────
+data:
+  dataset: "breakhis"
+  data_dir: "data/BreaKHis_v1"
+  task: "multi"             # <<< KEY CHANGE: 8-class subtype classification
+  subset: null              # Set e.g. 400 for quick sanity test, null for full run
+  num_workers: 8
+  seed: 42
+
+# ── Cross-Validation ────────────────────────────────────────────
+cv:
+  n_folds: 5                # 5-fold patient-stratified CV (same as binary)
+
+# ── Training ────────────────────────────────────────────────────
+training:
+  epochs: 60                # +10 vs binary — multiclass takes longer to converge
+  patience: 20              # More classes → more variance → needs more patience
+  grad_clip: 1.0
+
+# ── Models ──────────────────────────────────────────────────────
+# Strategy: Run top binary performers + lightweight baselines.
+# Batch sizes reduced ~20% vs binary to handle 8-class output heads.
+models:
+  # ── Baselines ──────────────────────────────────────────────────
+
+  efficientnet:
+    enabled: true
+    batch_size: 28            # 32 → 28 (safer for multiclass)
+    lr: 5.0e-5                # Slightly lower — multiclass gradients are noisier
+    weight_decay: 1.0e-4
+    use_amp: true
+    label_smoothing: 0.1
+
+  efficientnet_b5:
+    enabled: true
+    batch_size: 14            # 16 → 14
+    lr: 5.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    label_smoothing: 0.1
+
+  hybrid_vit:
+    enabled: true
+    batch_size: 28
+    lr: 5.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    d_model: 256
+    num_heads: 4
+    num_layers: 2
+    dropout: 0.1
+    warmup_epochs: 5
+    freeze_backbone: false
+    label_smoothing: 0.1
+
+  vit_tiny:
+    enabled: true
+    batch_size: 28
+    lr: 5.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    label_smoothing: 0.1
+
+  # ── Transformers ────────────────────────────────────────────────
+
+  swin_tiny:
+    enabled: true
+    batch_size: 28
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    label_smoothing: 0.1
+
+  swin_small:
+    enabled: true
+    batch_size: 28
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    label_smoothing: 0.1
+
+  swin_v2_small:
+    enabled: true
+    batch_size: 8             # OOM risk — keep low
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    label_smoothing: 0.1
+
+  convnext_tiny:
+    enabled: true
+    batch_size: 28
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    label_smoothing: 0.1
+
+  convnext_small:
+    enabled: true
+    batch_size: 28
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    label_smoothing: 0.1
+
+  deit_tiny:
+    enabled: true
+    batch_size: 28
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    label_smoothing: 0.1
+
+  deit_small:
+    enabled: true
+    batch_size: 28
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    label_smoothing: 0.1
+
+  deit_base:
+    enabled: true
+    batch_size: 14
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    label_smoothing: 0.1
+
+  # ── Fusion models ────────────────────────────────────────────────
+
+  dual_branch_fusion:
+    enabled: true
+    batch_size: 14
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    label_smoothing: 0.1
+    swin_variant: "small"
+    convnext_variant: "small"
+    fusion_dim: 512
+    num_heads: 8
+    entropy_weight: 0.01
+
+  # ── Quantum models ───────────────────────────────────────────────
+  # Disabled by default — enable individually after transformers converge
+
+  qenn_ry:
+    enabled: false
+    batch_size: 14
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: false
+    n_qubits: 8
+    n_layers: 2
+    rotation_config: "ry"
+    entanglement: "cyclic"
+    label_smoothing: 0.1
+
+  qenn_ry_rz:
+    enabled: false
+    batch_size: 14
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: false
+    n_qubits: 8
+    n_layers: 2
+    rotation_config: "ry_rz"
+    entanglement: "cyclic"
+    label_smoothing: 0.1
+
+  qenn_u3:
+    enabled: false
+    batch_size: 14
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: false
+    n_qubits: 8
+    n_layers: 2
+    rotation_config: "u3"
+    entanglement: "cyclic"
+    label_smoothing: 0.1
+
+  qenn_rx_ry_rz:
+    enabled: false
+    batch_size: 14
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: false
+    n_qubits: 8
+    n_layers: 2
+    rotation_config: "rx_ry_rz"
+    entanglement: "cyclic"
+    label_smoothing: 0.1
+
+  quantum_enhanced_fusion:
+    enabled: false
+    batch_size: 14
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: false
+    swin_variant: "small"
+    convnext_variant: "small"
+    n_qubits: 8
+    n_layers: 2
+    quantum_rotation_config: "u3"
+    quantum_entanglement: "cyclic"
+    label_smoothing: 0.1
+
+  # ── TBCA Fusion (Top binary performers) ─────────────────────────
+
+  cb_qccf:
+    enabled: false
+    batch_size: 14
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: false
+    backbone: "swin_small"
+    quantum_backbone: "resnet18"
+    n_qubits: 8
+    n_layers: 2
+    rotation_config: "u3"
+    entanglement: "cyclic"
+    specificity_weight: 2.0
+    label_smoothing: 0.1
+
+  cb_qccf_convnet_efficient:
+    enabled: false
+    batch_size: 12
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: false
+    n_qubits: 8
+    n_layers: 2
+    rotation_config: "u3"
+    entanglement: "cyclic"
+    specificity_weight: 2.0
+    label_smoothing: 0.1
+
+  cb_qccf_swin_convnet:
+    enabled: false
+    batch_size: 12
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: false
+    n_qubits: 8
+    n_layers: 2
+    rotation_config: "u3"
+    entanglement: "cyclic"
+    specificity_weight: 2.0
+    label_smoothing: 0.1
+
+  multi_scale_quantum_fusion:
+    enabled: false
+    batch_size: 14
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: false
+    backbone: "resnet34"
+    n_qubits: 8
+    n_layers: 2
+    label_smoothing: 0.1
+
+  ensemble_distillation:
+    enabled: false
+    batch_size: 14
+    lr: 2.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    temperature: 4.0
+    distillation_alpha: 0.7
+    label_smoothing: 0.1
+
+  triple_branch_fusion:
+    enabled: false
+    batch_size: 8
+    lr: 1.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    efficientnet_variant: "b5"
+    swin_variant: "small"
+    convnext_variant: "small"
+    fusion_dim: 768
+    num_heads: 8
+    entropy_weight: 0.01
+    label_smoothing: 0.1
+
+  triple_branch_fusion_quantum:
+    enabled: false
+    batch_size: 8
+    lr: 1.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    efficientnet_variant: "b5"
+    swin_variant: "small"
+    convnext_variant: "small"
+    fusion_dim: 768
+    num_heads: 8
+    n_qubits: 8
+    n_layers: 2
+    quantum_rotation_config: "u3"
+    quantum_entanglement: "cyclic"
+    entropy_weight: 0.01
+    label_smoothing: 0.1
+
+  triple_branch_fusion_bottleneck:
+    enabled: false
+    batch_size: 8
+    lr: 1.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    efficientnet_variant: "b5"
+    swin_variant: "small"
+    convnext_variant: "small"
+    fusion_dim: 768
+    num_heads: 8
+    n_qubits: 8
+    n_layers: 2
+    quantum_rotation_config: "u3"
+    quantum_entanglement: "cyclic"
+    entropy_weight: 0.01
+    label_smoothing: 0.1
+
+  triple_branch_fusion_cnn_featuremap_quantum:
+    enabled: false
+    batch_size: 8
+    lr: 1.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    efficientnet_variant: "b5"
+    swin_variant: "small"
+    convnext_variant: "small"
+    fusion_dim: 768
+    num_heads: 8
+    n_qubits: 8
+    n_layers: 2
+    quantum_rotation_config: "u3"
+    quantum_entanglement: "cyclic"
+    entropy_weight: 0.01
+    label_smoothing: 0.1
+
+  triple_branch_fusion_vit_featuremap_quantum:
+    enabled: false
+    batch_size: 8
+    lr: 1.0e-5
+    weight_decay: 1.0e-4
+    use_amp: true
+    efficientnet_variant: "b5"
+    swin_variant: "small"
+    convnext_variant: "small"
+    fusion_dim: 768
+    num_heads: 8
+    n_qubits: 8
+    n_layers: 2
+    quantum_rotation_config: "u3"
+    quantum_entanglement: "cyclic"
+    entropy_weight: 0.01
+    label_smoothing: 0.1
+
+# ── Output ──────────────────────────────────────────────────────
+output:
+  output_dir: "outputs_multiclass"       # Separate from binary outputs
+  wandb_enabled: true
+  wandb_project: "breast-cancer-multiclass-2026"
+  log_model: false                        # Skip checkpoint upload to save quota
+
+# ── GPU ─────────────────────────────────────────────────────────
+gpu:
+  use_tf32: true
+  benchmark_mode: true
+  deterministic: false

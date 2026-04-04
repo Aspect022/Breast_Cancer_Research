@@ -29,7 +29,10 @@ from typing import Any, Dict, Optional
 # Add project root to path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from src.data.dataset import get_kfold_splits, set_seed, get_multidataset_kfold_splits
+from src.data.dataset import (
+    get_kfold_splits, set_seed, get_multidataset_kfold_splits,
+    compute_class_weights, BREAKHIS_8CLASS_NAMES,
+)
 from src.models.efficientnet import get_efficientnet_b3, get_efficientnet_b5
 from src.models.transformer import (
     get_hybrid_vit, get_vit_tiny,
@@ -56,7 +59,7 @@ from src.models.fusion import (
 )
 from src.utils.metrics import (
     compute_metrics, print_medical_metrics, get_convergence_epoch,
-    plot_training_curves, plot_confusion_matrix, plot_roc_curve,
+    plot_training_curves, plot_confusion_matrix, plot_roc_curve, plot_per_class_metrics,
     count_parameters, compute_flops, measure_inference_time, get_gpu_memory_peak,
     count_attention_params, count_quantum_params,
     save_results_csv, save_epoch_log, build_comparison_row,
@@ -74,7 +77,16 @@ def load_config(config_path="config.yaml"):
 
 TASK_CLASS_NAMES = {
     'binary': ['Benign', 'Malignant'],
-    'multi': ['IDC', 'ILC', 'Fibroadenoma']
+    'multi': [
+        'Adenosis',           # 0 — Benign
+        'Fibroadenoma',       # 1 — Benign
+        'Phyllodes',          # 2 — Benign
+        'Tubular_Adenoma',    # 3 — Benign
+        'Ductal_Carcinoma',   # 4 — Malignant
+        'Lobular_Carcinoma',  # 5 — Malignant
+        'Mucinous_Carcinoma', # 6 — Malignant
+        'Papillary_Carcinoma',# 7 — Malignant
+    ],
 }
 
 
@@ -481,8 +493,20 @@ def build_model(model_name, num_classes, model_cfg):
         raise ValueError(f"Unknown model: {model_name}")
 
 
-def build_criterion(model_name: str, model_cfg: Dict[str, Any]) -> nn.Module:
-    """Return the appropriate objective for the selected model."""
+def build_criterion(
+    model_name: str,
+    model_cfg: Dict[str, Any],
+    class_weights: Optional[torch.Tensor] = None,
+) -> nn.Module:
+    """Return the appropriate objective for the selected model.
+
+    Args:
+        model_name:    Key identifying the model (used to pick specialised losses).
+        model_cfg:     Model hyperparameter dict from config.yaml.
+        class_weights: Optional FloatTensor of shape (num_classes,) for
+                       class-weighted CrossEntropyLoss.  Passed only for
+                       multiclass tasks to handle BreakHis subtype imbalance.
+    """
     if model_name in {'cb_qccf', 'cb_qccf_convnet_efficient', 'cb_qccf_swin_convnet'}:
         return ClassBalancedLoss(
             specificity_weight=model_cfg.get('specificity_weight', 2.0),
@@ -492,9 +516,12 @@ def build_criterion(model_name: str, model_cfg: Dict[str, Any]) -> nn.Module:
             temperature=model_cfg.get('temperature', 4.0),
             alpha=model_cfg.get('distillation_alpha', 0.7),
         )
-    # Label smoothing (0.1) damps overconfidence and improves specificity generalization
+    # Label smoothing (0.1) damps overconfidence and improves generalisation
     label_smoothing = model_cfg.get('label_smoothing', 0.1)
-    return nn.CrossEntropyLoss(label_smoothing=label_smoothing)
+    return nn.CrossEntropyLoss(
+        weight=class_weights,          # None → no weighting (binary); Tensor → weighted (multi)
+        label_smoothing=label_smoothing,
+    )
 
 
 def compute_loss_and_logits(
@@ -636,6 +663,7 @@ def train_fold(
     fold_idx,
     display_name,
     wandb_logger: Optional[WandBLogger] = None,
+    class_weights: Optional[torch.Tensor] = None,
 ):
     lr = model_cfg.get('lr', 1e-4)
     wd = model_cfg.get('weight_decay', 1e-4)
@@ -648,7 +676,9 @@ def train_fold(
     num_classes = list(model.parameters())[-1].shape[0]
 
     model_name = model_cfg.get('model_key', display_name)
-    criterion = build_criterion(model_name, model_cfg)
+    # Move class_weights to same device as model before building criterion
+    weights_on_device = class_weights.to(device) if class_weights is not None else None
+    criterion = build_criterion(model_name, model_cfg, class_weights=weights_on_device)
     optimizer = AdamW(model.parameters(), lr=lr, weight_decay=wd)
     scheduler = CosineAnnealingLR(optimizer, T_max=epochs)
     scaler = GradScaler('cuda') if use_amp else None
@@ -795,6 +825,10 @@ def evaluate_on_test(model, best_path, test_loader, device, num_classes,
     plot_confusion_matrix(test_metrics['confusion_matrix'], class_names, output_dir, fold_name)
     plot_roc_curve(test_labels, test_probs, num_classes, class_names, output_dir, fold_name)
 
+    # Per-class bar chart (multiclass only)
+    if num_classes > 2:
+        plot_per_class_metrics(test_metrics, class_names, output_dir, fold_name)
+
     # Print medical metrics for visibility
     print_medical_metrics(test_metrics, class_names, num_classes)
 
@@ -902,6 +936,7 @@ def run_model_pipeline(model_name, cfg, all_results, wandb_run=None):
 
     fold_rows = []
     model_start_time = time.time()
+    class_weights = None  # Computed on first fold; reused across folds
 
     # Use unified k-fold loader that supports all datasets
     for fold_idx, train_loader, val_loader, test_loader, nc in get_multidataset_kfold_splits(
@@ -916,6 +951,20 @@ def run_model_pipeline(model_name, cfg, all_results, wandb_run=None):
     ):
         print(f"\n  ── Fold {fold_idx + 1}/{n_folds} ──")
 
+        # ── Compute class weights once (from first fold's training labels) ──
+        if class_weights is None and num_classes > 2:
+            train_labels = [
+                int(lbl.item())
+                for _, lbls in train_loader
+                for lbl in lbls
+            ]
+            class_weights = compute_class_weights(train_labels, num_classes)
+            print(f"  ⚙️  Class weights (multiclass): "
+                  + " | ".join(
+                      f"{class_names[i]}: {class_weights[i]:.3f}"
+                      for i in range(num_classes)
+                  ))
+
         model, _, _ = build_model(model_name, num_classes, model_cfg)
         model = model.to(device)
         model._model_key = model_name
@@ -925,6 +974,7 @@ def run_model_pipeline(model_name, cfg, all_results, wandb_run=None):
             model, model_cfg, train_cfg, train_loader, val_loader,
             device, model_output_dir, fold_idx, display_name,
             wandb_logger=wandb_logger,
+            class_weights=class_weights,
         )
 
         # Test
