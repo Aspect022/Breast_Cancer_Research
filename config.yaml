@@ -42,6 +42,18 @@ models:
   
   # 1. EfficientNet-B3 Baseline
   efficientnet:
+  efficientnet_b5:
+
+    enabled: true
+
+    batch_size: 4
+
+    lr: 1.0e-4
+
+    weight_decay: 1.0e-4
+
+    use_amp: true
+
     enabled: true
     batch_size: 32
     lr: 1.0e-4

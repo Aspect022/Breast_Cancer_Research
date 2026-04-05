@@ -1,0 +1,6 @@
+Model,Paradigm,Fold,Best_Epoch,Convergence_Ep,Val_AUC,Val_Best_Acc,Test_Acc,Test_BalAcc,Test_Sensitivity,Test_Specificity,Test_F1,Test_AUC,Test_MCC,Test_FNR,Test_PPV,Test_NPV,Inference_ms,GPU_Mem_GB,Fold_Time_s
+TBCA-ViT-FeatureMap-Quantum,fusion_quantum,1,20,20,0.9056,0.8724,0.8199,0.7961,0.9366,0.6556,0.8051,0.9197,0.6314,0.0634,0.7928,0.7928,50.36,5.76,6276.8
+TBCA-ViT-FeatureMap-Quantum,fusion_quantum,2,5,5,0.9987,0.9787,0.8802,0.8735,0.913,0.8339,0.8758,0.9327,0.7522,0.087,0.8855,0.8855,50.04,5.76,3391.9
+TBCA-ViT-FeatureMap-Quantum,fusion_quantum,3,10,10,0.9006,0.8568,0.8656,0.8542,0.9217,0.7867,0.8593,0.8733,0.7221,0.0783,0.8588,0.8588,53.11,5.76,4249.9
+TBCA-ViT-FeatureMap-Quantum,fusion_quantum,4,15,15,0.9872,0.9596,0.8548,0.8363,0.9453,0.7273,0.845,0.9318,0.7027,0.0547,0.8299,0.8299,48.73,5.76,5085.6
+TBCA-ViT-FeatureMap-Quantum,fusion_quantum,5,24,24,0.9305,0.9056,0.8649,0.8539,0.9193,0.7885,0.8587,0.9054,0.7205,0.0807,0.8595,0.8595,48.89,5.76,6640.1
