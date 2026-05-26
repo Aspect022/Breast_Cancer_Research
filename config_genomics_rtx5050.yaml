@@ -1,0 +1,212 @@
+# Genomics + Multimodal RTX 5050 Configuration
+# Use this config for local/laptop development and RTX 5050 runs.
+
+data:
+  dataset: "geo_tnbc"
+  task: "pcr_binary"
+  data_dir: "data/geo_tnbc"
+  seed: 42
+  num_workers: 2
+  subset: null
+
+  geo_tnbc:
+    cohorts:
+      - "GSE25066"
+      - "GSE20271"
+      - "GSE20194"
+      - "GSE32646"
+    raw_dir: "data/geo_tnbc/raw"
+    processed_dir: "data/geo_tnbc/processed"
+    feature_sets:
+      genes_100: "combined_325_genes_100.csv"
+      genes_500: "combined_325_genes_500.csv"
+      genes_1000: "combined_325_genes_1000.csv"
+    labels_file: "labels_pcr_rd.csv"
+    batch_file: "batches.csv"
+    subtype_file: "lehmann_subtypes.csv"
+
+  tcga_brca:
+    data_dir: "data/tcga_brca"
+    processed_dir: "data/tcga_brca/processed"
+    rnaseq_file: "rnaseq_fpkm_top1000.csv"
+    pam50_file: "pam50_labels.csv"
+    clinical_file: "clinical.csv"
+    paired_features_dir: "data/tcga_brca/features"
+
+cv:
+  n_folds: 5
+  test_holdout: 0.15
+  stratified: true
+  patient_level: true
+
+training:
+  epochs: 100
+  patience: 15
+  grad_clip: 1.0
+  use_amp: true
+  deterministic: false
+  smote_training: true
+  class_weight_auto: true
+  label_smoothing: 0.0
+
+models:
+  g_baseline_mlp:
+    enabled: true
+    phase: 1
+    input_feature_set: "genes_500"
+    hidden: [256, 128, 64]
+    dropout: 0.3
+    batch_size: 32
+    lr: 1.0e-3
+    weight_decay: 1.0e-4
+    optimizer: "adamw"
+
+  g_baseline_trees:
+    enabled: true
+    phase: 1
+    input_feature_set: "genes_100"
+    rf_estimators: 500
+    xgb_estimators: 200
+    xgb_max_depth: 3
+    xgb_lr: 0.05
+    svm_kernel: "rbf"
+    calibration: "isotonic"
+    n_jobs: 6
+
+  g_pasnet:
+    enabled: false
+    phase: 2
+    input_feature_set: "genes_1000"
+    pathway_source: "kegg"
+    pathway_cache: "data/geo_tnbc/pathway_masks/kegg_pathway_membership.pkl"
+    n_filters: 16
+    dropout: 0.3
+    pathway_dropout: 0.2
+    batch_size: 16
+    lr: 5.0e-4
+    weight_decay: 1.0e-4
+    optimizer: "adamw"
+
+  g_pathformer_lite:
+    enabled: false
+    phase: 2
+    input_feature_set: "genes_1000"
+    pathway_source: "kegg"
+    n_pathways: 231
+    pathway_embed_dim: 96
+    n_heads: 4
+    n_layers: 2
+    ffn_dim: 192
+    dropout: 0.25
+    batch_size: 8
+    lr: 1.0e-4
+    weight_decay: 1.0e-4
+    optimizer: "adamw"
+
+  g_tabtransformer:
+    enabled: false
+    phase: 3
+    input_feature_set: "genes_500"
+    embed_dim: 48
+    n_heads: 4
+    n_layers: 2
+    ffn_dim: 192
+    dropout: 0.25
+    batch_size: 8
+    lr: 1.0e-4
+    weight_decay: 1.0e-4
+    optimizer: "adamw"
+    warmup_steps: 50
+
+  g_multiscale_1dcnn:
+    enabled: false
+    phase: 3
+    input_feature_set: "genes_1000"
+    filters_per_scale: 12
+    kernel_sizes: [5, 15, 31, 63, 127]
+    transformer_dim: 24
+    transformer_heads: 4
+    dropout: 0.3
+    batch_size: 16
+    lr: 5.0e-4
+    weight_decay: 1.0e-4
+    optimizer: "adamw"
+
+  g_bilstm:
+    enabled: false
+    phase: 3
+    input_feature_set: "genes_500"
+    embed_dim: 24
+    lstm_hidden: 48
+    lstm_layers: 2
+    dropout: 0.3
+    batch_size: 16
+    lr: 5.0e-4
+    weight_decay: 1.0e-4
+    optimizer: "adamw"
+
+  g_gcn_ppi:
+    enabled: false
+    phase: 4
+    input_feature_set: "genes_1000"
+    ppi_score_threshold: 700
+    hidden_dim: 48
+    output_dim: 96
+    dropout: 0.3
+    batch_size: 8
+    lr: 5.0e-4
+    weight_decay: 1.0e-4
+    optimizer: "adamw"
+
+  g_quantum_mlp:
+    enabled: false
+    phase: 5
+    input_feature_set: "genes_100"
+    hidden_dim: 32
+    n_qubits: 8
+    n_layers: 2
+    rotation_config: "u3"
+    entanglement: "cyclic"
+    backend: "vectorized_torch"
+    dropout: 0.3
+    batch_size: 8
+    lr: 1.0e-4
+    weight_decay: 1.0e-4
+    optimizer: "adamw"
+
+  g_pathway_quantum:
+    enabled: false
+    phase: 5
+    input_feature_set: "genes_1000"
+    pathway_source: "kegg"
+    n_pathways_selected: 32
+    pathway_filters: 12
+    n_qubits: 8
+    n_layers: 2
+    rotation_config: "u3"
+    entanglement: "cyclic"
+    backend: "vectorized_torch"
+    dropout: 0.3
+    batch_size: 8
+    lr: 5.0e-5
+    weight_decay: 1.0e-4
+    optimizer: "adamw"
+
+output:
+  output_dir: "outputs_genomics"
+  save_best_model: true
+  save_plots: true
+  save_csv: true
+  save_checkpoints: true
+  wandb_enabled: false
+  wandb_project: "breast-cancer-genomics-rtx5050"
+
+gpu:
+  target: "rtx5050"
+  use_tf32: true
+  use_amp: true
+  benchmark_mode: true
+  deterministic: false
+  compile_models: false
+  empty_cache_between_folds: true
+

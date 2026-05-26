@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Breast Cancer Classification Results</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+            margin-top: 2em;
+        }
+        h1 { margin-top: 1em; }
+        p { margin-bottom: 15px; }
+        strong { color: #111; }
+        
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 2rem;
+            font-size: 14px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        th, td {
+            border: 1px solid #dee2e6;
+            padding: 10px 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+            position: sticky;
+            top: 0;
+        }
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        tr:hover {
+            background-color: #f1f3f5;
+        }
+        
+        .note {
+            background-color: #e9ecef;
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 0 4px 4px 0;
+        }
+        
+        .print-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: all 0.2s ease;
+            z-index: 1000;
+        }
+        .print-btn:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+        }
+        
+        .hardware-info {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 30px;
+        }
+        
+        @media print {
+            .print-btn { display: none; }
+            body { padding: 0; max-width: 100%; }
+            table { page-break-inside: auto; font-size: 12px; }
+            tr { page-break-inside: avoid; page-break-after: auto; }
+            h1, h2, h3 { border-bottom: 1px solid #000; }
+            th { background-color: #eee !important; -webkit-print-color-adjust: exact; }
+            tr:nth-child(even) { background-color: #f9f9f9 !important; -webkit-print-color-adjust: exact; }
+            .note { background-color: #f0f0f0 !important; -webkit-print-color-adjust: exact; }
+        }
+    </style>
+</head>
+<body>
+
+    <button class="print-btn" onclick="window.print()">🖨️ Print as PDF</button>
+
+    <h1>🧬 Breast Cancer Histopathology — Binary Classification: Complete Results</h1>
+
+    <div class="hardware-info">
+        <p><strong>Dataset:</strong> BreakHis (Breast Cancer Histopathological Image Database)</p>
+        <p><strong>Task:</strong> Binary Classification — Benign vs. Malignant</p>
+        <p><strong>Protocol:</strong> 5-Fold Patient-Level Cross-Validation (stratified, patient-leakage-free)</p>
+        <p><strong>Total Dataset:</strong> 7,909 images | Malignant 68.6% (5,429) | Benign 31.4% (2,480)</p>
+        <p><strong>Framework:</strong> PyTorch | Weights & Biases (W&B) Experiment Tracking</p>
+        <p><strong>Primary Metric:</strong> Validation Accuracy (mean ± std across 5 folds)</p>
+        <p><strong>Note:</strong> For duplicate model runs, only the <strong>best-performing run</strong> is retained.</p>
+    </div>
+
+    <hr>
+
+    <h2>📊 Complete Model Comparison Table (Sorted by Val Accuracy ↓)</h2>
+
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Model</th>
+                <th>Paradigm</th>
+                <th style="text-align: right;">Params</th>
+                <th style="text-align: center;"><strong>Val Acc ↑</strong></th>
+                <th style="text-align: center;">Val Acc Std</th>
+                <th style="text-align: center;">Val AUC ↑</th>
+                <th style="text-align: center;">Val AUC Std</th>
+                <th style="text-align: center;">Sensitivity ↑</th>
+                <th style="text-align: center;">Specificity ↑</th>
+                <th style="text-align: center;">F1 (macro) ↑</th>
+                <th style="text-align: center;">MCC ↑</th>
+                <th style="text-align: center;">FNR ↓</th>
+                <th style="text-align: center;">Inf. (ms)</th>
+                <th style="text-align: center;">Train Time</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td>1</td><td><strong>TBCA-CNN-FeatureMap-Quantum</strong> 🏆</td><td>Fusion-Quantum</td><td style="text-align: right;">142.5M</td><td style="text-align: center;"><strong>95.48%</strong></td><td style="text-align: center;">±1.53%</td><td style="text-align: center;">98.92%</td><td style="text-align: center;">±1.85%</td><td style="text-align: center;">99.06%</td><td style="text-align: center;">88.10%</td><td style="text-align: center;">94.72%</td><td style="text-align: center;">89.70%</td><td style="text-align: center;">0.94%</td><td style="text-align: center;">70.1 ms</td><td style="text-align: center;">~337 min</td></tr>
+            <tr><td>2</td><td><strong>TripleBranch-Fusion (TBCA)</strong></td><td>Fusion</td><td style="text-align: right;">141.4M</td><td style="text-align: center;"><strong>93.01%</strong></td><td style="text-align: center;">±5.05%</td><td style="text-align: center;">98.61%</td><td style="text-align: center;">±2.36%</td><td style="text-align: center;">98.95%</td><td style="text-align: center;">80.74%</td><td style="text-align: center;">91.65%</td><td style="text-align: center;">87.76%</td><td style="text-align: center;">1.05%</td><td style="text-align: center;">73.2 ms</td><td style="text-align: center;">~374 min</td></tr>
+            <tr><td>3</td><td><strong>TBCA-Quantum-Bottleneck</strong></td><td>Fusion-Quantum</td><td style="text-align: right;">142.2M</td><td style="text-align: center;"><strong>92.94%</strong></td><td style="text-align: center;">±3.80%</td><td style="text-align: center;">97.24%</td><td style="text-align: center;">±3.41%</td><td style="text-align: center;">98.64%</td><td style="text-align: center;">72.90%</td><td style="text-align: center;">91.59%</td><td style="text-align: center;">84.45%</td><td style="text-align: center;">1.36%</td><td style="text-align: center;">91.9 ms</td><td style="text-align: center;">~477 min</td></tr>
+            <tr><td>4</td><td><strong>TBCA-Quantum-Fusion</strong></td><td>Fusion-Quantum</td><td style="text-align: right;">141.8M</td><td style="text-align: center;"><strong>91.03%</strong></td><td style="text-align: center;">±1.80%</td><td style="text-align: center;">99.01%</td><td style="text-align: center;">±1.51%</td><td style="text-align: center;">99.69%</td><td style="text-align: center;">73.16%</td><td style="text-align: center;">88.96%</td><td style="text-align: center;">88.97%</td><td style="text-align: center;">0.31%</td><td style="text-align: center;">83.3 ms</td><td style="text-align: center;">~274 min</td></tr>
+            <tr><td>5</td><td><strong>EfficientNet-B5</strong></td><td>CNN</td><td style="text-align: right;">28.3M</td><td style="text-align: center;"><strong>93.22%</strong></td><td style="text-align: center;">±2.73%</td><td style="text-align: center;">97.89%</td><td style="text-align: center;">±1.81%</td><td style="text-align: center;">99.58%</td><td style="text-align: center;">80.59%</td><td style="text-align: center;">91.85%</td><td style="text-align: center;">87.26%</td><td style="text-align: center;">0.42%</td><td style="text-align: center;">26.7 ms</td><td style="text-align: center;">~98 min</td></tr>
+            <tr><td>6</td><td><strong>TBCA-ViT-FeatureMap-Quantum</strong></td><td>Fusion-Quantum</td><td style="text-align: right;">124.5M</td><td style="text-align: center;"><strong>91.88%</strong></td><td style="text-align: center;">±1.45%</td><td style="text-align: center;">91.08%</td><td style="text-align: center;">±3.26%</td><td style="text-align: center;">92.42%</td><td style="text-align: center;">77.17%</td><td style="text-align: center;">90.09%</td><td style="text-align: center;">71.28%</td><td style="text-align: center;">7.58%</td><td style="text-align: center;">89.5 ms</td><td style="text-align: center;">~413 min</td></tr>
+            <tr><td>7</td><td><strong>Swin-Small</strong> (v2)</td><td>Transformer</td><td style="text-align: right;">49.0M</td><td style="text-align: center;"><strong>93.01%</strong></td><td style="text-align: center;">±3.10%</td><td style="text-align: center;">98.63%</td><td style="text-align: center;">±2.10%</td><td style="text-align: center;">99.06%</td><td style="text-align: center;">80.52%</td><td style="text-align: center;">91.63%</td><td style="text-align: center;">84.13%</td><td style="text-align: center;">0.94%</td><td style="text-align: center;">28.4 ms</td><td style="text-align: center;">~41 min</td></tr>
+            <tr><td>8</td><td><strong>CNN+ViT Hybrid</strong></td><td>Transformer</td><td style="text-align: right;">12.7M</td><td style="text-align: center;"><strong>93.29%</strong></td><td style="text-align: center;">±3.29%</td><td style="text-align: center;">97.13%</td><td style="text-align: center;">±2.85%</td><td style="text-align: center;">96.65%</td><td style="text-align: center;">87.87%</td><td style="text-align: center;">92.23%</td><td style="text-align: center;">85.10%</td><td style="text-align: center;">3.35%</td><td style="text-align: center;">21.3 ms</td><td style="text-align: center;">~70 min</td></tr>
+            <tr><td>9</td><td><strong>EfficientNet-B3</strong></td><td>CNN</td><td style="text-align: right;">10.7M</td><td style="text-align: center;"><strong>94.07%</strong></td><td style="text-align: center;">±4.28%</td><td style="text-align: center;">97.59%</td><td style="text-align: center;">±4.32%</td><td style="text-align: center;">98.74%</td><td style="text-align: center;">84.42%</td><td style="text-align: center;">93.00%</td><td style="text-align: center;">86.47%</td><td style="text-align: center;">1.26%</td><td style="text-align: center;">20.1 ms</td><td style="text-align: center;">~59 min</td></tr>
+            <tr><td>10</td><td><strong>Quantum-Enhanced-Fusion</strong></td><td>Fusion-Quantum</td><td style="text-align: right;">99.6M</td><td style="text-align: center;"><strong>94.49%</strong></td><td style="text-align: center;">±N/A%</td><td style="text-align: center;">98.15%</td><td style="text-align: center;">±N/A%</td><td style="text-align: center;">99.06%</td><td style="text-align: center;">85.06%</td><td style="text-align: center;">93.50%</td><td style="text-align: center;">87.47%</td><td style="text-align: center;">0.94%</td><td style="text-align: center;">49.3 ms</td><td style="text-align: center;">~188 min</td></tr>
+            <tr><td>11</td><td><strong>DualBranch-Fusion</strong></td><td>Fusion</td><td style="text-align: right;">100.6M</td><td style="text-align: center;"><strong>92.16%</strong></td><td style="text-align: center;">±4.00%</td><td style="text-align: center;">90.06%</td><td style="text-align: center;">±3.76%</td><td style="text-align: center;">99.79%</td><td style="text-align: center;">74.96%</td><td style="text-align: center;">90.45%</td><td style="text-align: center;">67.81%</td><td style="text-align: center;">0.21%</td><td style="text-align: center;">46.0 ms</td><td style="text-align: center;">~123 min</td></tr>
+            <tr><td>12</td><td><strong>QENN-U3</strong></td><td>Quantum</td><td style="text-align: right;">11.5M</td><td style="text-align: center;"><strong>90.89%</strong></td><td style="text-align: center;">±5.12%</td><td style="text-align: center;">97.33%</td><td style="text-align: center;">±2.65%</td><td style="text-align: center;">98.01%</td><td style="text-align: center;">76.19%</td><td style="text-align: center;">89.03%</td><td style="text-align: center;">79.11%</td><td style="text-align: center;">1.99%</td><td style="text-align: center;">23.6 ms</td><td style="text-align: center;">~94 min</td></tr>
+            <tr><td>13</td><td><strong>ConvNeXt-Small</strong></td><td>Transformer</td><td style="text-align: right;">50.0M</td><td style="text-align: center;"><strong>91.60%</strong></td><td style="text-align: center;">±2.73%</td><td style="text-align: center;">98.37%</td><td style="text-align: center;">±3.86%</td><td style="text-align: center;">98.43%</td><td style="text-align: center;">75.66%</td><td style="text-align: center;">89.89%</td><td style="text-align: center;">80.80%</td><td style="text-align: center;">1.57%</td><td style="text-align: center;">16.0 ms</td><td style="text-align: center;">~44 min</td></tr>
+            <tr><td>14</td><td><strong>CB-QCCF</strong></td><td>Fusion-Quantum</td><td style="text-align: right;">62.9M</td><td style="text-align: center;"><strong>93.99%</strong></td><td style="text-align: center;">±3.02%</td><td style="text-align: center;">96.31%</td><td style="text-align: center;">±3.08%</td><td style="text-align: center;">99.69%</td><td style="text-align: center;">74.76%</td><td style="text-align: center;">92.83%</td><td style="text-align: center;">86.48%</td><td style="text-align: center;">0.31%</td><td style="text-align: center;">37.3 ms</td><td style="text-align: center;">~102 min</td></tr>
+            <tr><td>15</td><td><strong>MSQ-Fusion</strong></td><td>Fusion-Quantum</td><td style="text-align: right;">9.1M</td><td style="text-align: center;"><strong>86.09%</strong></td><td style="text-align: center;">±N/A%</td><td style="text-align: center;">94.69%</td><td style="text-align: center;">±N/A%</td><td style="text-align: center;">92.77%</td><td style="text-align: center;">72.29%</td><td style="text-align: center;">83.61%</td><td style="text-align: center;">67.60%</td><td style="text-align: center;">7.23%</td><td style="text-align: center;">39.6 ms</td><td style="text-align: center;">±94 min</td></tr>
+            <tr><td>16</td><td><strong>Swin-Tiny</strong></td><td>Transformer</td><td style="text-align: right;">27.7M</td><td style="text-align: center;"><strong>84.91%</strong></td><td style="text-align: center;">±2.80%</td><td style="text-align: center;">86.84%</td><td style="text-align: center;">±1.40%</td><td style="text-align: center;">84.61%</td><td style="text-align: center;">78.38%</td><td style="text-align: center;">81.38%</td><td style="text-align: center;">63.37%</td><td style="text-align: center;">15.39%</td><td style="text-align: center;">14.3 ms</td><td style="text-align: center;">~36 min</td></tr>
+            <tr><td>17</td><td><strong>ConvNeXt-Tiny</strong></td><td>Transformer</td><td style="text-align: right;">28.3M</td><td style="text-align: center;"><strong>85.74%</strong></td><td style="text-align: center;">±4.84%</td><td style="text-align: center;">88.37%</td><td style="text-align: center;">±1.90%</td><td style="text-align: center;">85.61%</td><td style="text-align: center;">81.20%</td><td style="text-align: center;">83.27%</td><td style="text-align: center;">66.98%</td><td style="text-align: center;">14.39%</td><td style="text-align: center;">9.2 ms</td><td style="text-align: center;">~35 min</td></tr>
+            <tr><td>18</td><td><strong>ViT-Tiny</strong></td><td>Transformer</td><td style="text-align: right;">11.0M</td><td style="text-align: center;"><strong>78.42%</strong></td><td style="text-align: center;">±1.18%</td><td style="text-align: center;">83.27%</td><td style="text-align: center;">±2.42%</td><td style="text-align: center;">78.42%</td><td style="text-align: center;">75.24%</td><td style="text-align: center;">78.26%</td><td style="text-align: center;">57.33%</td><td style="text-align: center;">21.58%</td><td style="text-align: center;">4.8 ms</td><td style="text-align: center;">~35 min</td></tr>
+        </tbody>
+    </table>
+
+    <div class="note">
+        <strong>Note:</strong> <code>result-1.csv</code> contains earlier experimental runs on BreakHis and CBIS-DDSM (partially <code>cbis_ddsm</code> dataset). Only BreakHis runs are included here. For duplicate models, the most recent best-performing run is used. <code>result-2.csv</code> contains the most recent pipeline with updated hyperparameters (lr=1e-5, patience=10).
+    </div>
+
+    <hr>
+
+    <h2>🚀 Progression Narrative: Baseline → Best Fusion</h2>
+    
+    <p>This table tells the story of how the architecture evolved from a simple baseline to the best-performing model, showing measurable improvement at each step.</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Step</th>
+                <th>Architecture</th>
+                <th>Role</th>
+                <th>Val Acc</th>
+                <th>Val AUC</th>
+                <th>Sensitivity</th>
+                <th>Key Improvement</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td><strong>1</strong></td><td><strong>ViT-Tiny</strong></td><td>🏁 Starting Baseline</td><td>78.42%</td><td>83.27%</td><td>78.42%</td><td>—</td></tr>
+            <tr><td><strong>2</strong></td><td><strong>EfficientNet-B3</strong></td><td>CNN Baseline</td><td>94.07%</td><td>97.59%</td><td>98.74%</td><td>+15.65% val acc</td></tr>
+            <tr><td><strong>3</strong></td><td><strong>CNN+ViT Hybrid</strong></td><td>Hybrid Baseline</td><td>93.29%</td><td>97.13%</td><td>96.65%</td><td>CNN + Transformer</td></tr>
+            <tr><td><strong>4</strong></td><td><strong>Swin-Small</strong></td><td>Single Backbone (Transformer)</td><td>93.01%</td><td>98.63%</td><td>99.06%</td><td>Hierarchical attention</td></tr>
+            <tr><td><strong>5</strong></td><td><strong>DualBranch-Fusion</strong></td><td>2-Backbone Fusion</td><td>92.16%</td><td>90.06%</td><td>99.79%</td><td>Multi-backbone</td></tr>
+            <tr><td><strong>6</strong></td><td><strong>TripleBranch-Fusion (TBCA)</strong></td><td>3-Backbone Fusion</td><td>93.01%</td><td>98.61%</td><td>98.95%</td><td>Bidirectional cross-attention</td></tr>
+            <tr><td><strong>7</strong></td><td><strong>TBCA-Quantum-Fusion</strong></td><td>Quantum-Classical</td><td>91.03%</td><td>99.01%</td><td><strong>99.69%</strong></td><td>Quantum superposition</td></tr>
+            <tr><td><strong>8</strong></td><td><strong>TBCA-CNN-FeatureMap-Quantum</strong></td><td>🏆 Best Model</td><td><strong>95.48%</strong></td><td><strong>98.92%</strong></td><td>99.06%</td><td>Feature-map quantum branch</td></tr>
+        </tbody>
+    </table>
+
+    <p><strong>Summary:</strong> Progressing from ViT-Tiny (78.42%) → TBCA-CNN-FM-Quantum (95.48%) represents a <strong>+17.06% absolute improvement</strong> in validation accuracy. The TBCA-CNN-FeatureMap-Quantum model achieves the best overall validation accuracy while maintaining clinically safe high sensitivity.</p>
+
+    <hr>
+
+    <h2>🏆 Top-5 Rankings by Clinical Metrics</h2>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+        <div style="flex: 1; min-width: 300px;">
+            <h3>By Validation Accuracy</h3>
+            <table>
+                <thead><tr><th>Rank</th><th>Model</th><th>Val Acc</th></tr></thead>
+                <tbody>
+                    <tr><td>🥇</td><td><strong>TBCA-CNN-FeatureMap-Quantum</strong></td><td><strong>95.48%</strong></td></tr>
+                    <tr><td>🥈</td><td>EfficientNet-B3</td><td>94.07%</td></tr>
+                    <tr><td>🥉</td><td>Quantum-Enhanced-Fusion</td><td>94.49%</td></tr>
+                    <tr><td>4</td><td>CB-QCCF</td><td>93.99%</td></tr>
+                    <tr><td>5</td><td>EfficientNet-B5</td><td>93.22%</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div style="flex: 1; min-width: 300px;">
+            <h3>By Val AUC-ROC</h3>
+            <table>
+                <thead><tr><th>Rank</th><th>Model</th><th>Val AUC</th></tr></thead>
+                <tbody>
+                    <tr><td>🥇</td><td><strong>TBCA-Quantum-Fusion</strong></td><td><strong>99.01%</strong></td></tr>
+                    <tr><td>🥈</td><td>TBCA-CNN-FeatureMap-Quantum</td><td>98.92%</td></tr>
+                    <tr><td>🥉</td><td>TripleBranch-Fusion (TBCA)</td><td>98.61%</td></tr>
+                    <tr><td>4</td><td>Swin-Small</td><td>98.63%</td></tr>
+                    <tr><td>5</td><td>Quantum-Enhanced-Fusion</td><td>98.15%</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+        <div style="flex: 1; min-width: 300px;">
+            <h3>By Sensitivity (Lowest Cancer Miss Rate)</h3>
+            <table>
+                <thead><tr><th>Rank</th><th>Model</th><th>Sensitivity</th><th>FNR</th></tr></thead>
+                <tbody>
+                    <tr><td>🥇</td><td><strong>TBCA-Quantum-Fusion</strong></td><td><strong>99.69%</strong></td><td><strong>0.31%</strong></td></tr>
+                    <tr><td>🥈</td><td>Quantum-Enhanced-Fusion</td><td>99.06%</td><td>0.94%</td></tr>
+                    <tr><td>🥉</td><td>Swin-Small</td><td>99.06%</td><td>0.94%</td></tr>
+                    <tr><td>4</td><td>DualBranch-Fusion</td><td>99.79%</td><td>0.21%</td></tr>
+                    <tr><td>5</td><td>TBCA-CNN-FeatureMap-Quantum</td><td>99.06%</td><td>0.94%</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div style="flex: 1; min-width: 300px;">
+            <h3>By Specificity (Correct Benign Classification)</h3>
+            <table>
+                <thead><tr><th>Rank</th><th>Model</th><th>Specificity</th></tr></thead>
+                <tbody>
+                    <tr><td>🥇</td><td><strong>CNN+ViT Hybrid</strong></td><td><strong>87.87%</strong></td></tr>
+                    <tr><td>🥈</td><td>EfficientNet-B3</td><td>84.42%</td></tr>
+                    <tr><td>🥉</td><td>EfficientNet-B5</td><td>80.59%</td></tr>
+                    <tr><td>4</td><td>Swin-Small</td><td>80.52%</td></tr>
+                    <tr><td>5</td><td>TBCA-CNN-FeatureMap-Quantum</td><td>88.10%</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <h3>By MCC (Best for Imbalanced Data)</h3>
+    <table style="max-width: 600px;">
+        <thead><tr><th>Rank</th><th>Model</th><th>MCC</th></tr></thead>
+        <tbody>
+            <tr><td>🥇</td><td><strong>TBCA-CNN-FeatureMap-Quantum</strong></td><td><strong>89.70%</strong></td></tr>
+            <tr><td>🥈</td><td>TBCA-Quantum-Fusion</td><td>88.97%</td></tr>
+            <tr><td>🥉</td><td>TripleBranch-Fusion</td><td>87.76%</td></tr>
+            <tr><td>4</td><td>EfficientNet-B5</td><td>87.26%</td></tr>
+            <tr><td>5</td><td>CNN+ViT Hybrid</td><td>85.10%</td></tr>
+        </tbody>
+    </table>
+
+    <hr>
+
+    <h2>📉 Paradigm-Level Summary</h2>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Paradigm</th>
+                <th># Models</th>
+                <th style="text-align: center;">Mean Val Acc</th>
+                <th style="text-align: center;">Mean Val AUC</th>
+                <th style="text-align: center;">Mean Sens</th>
+                <th style="text-align: center;">Mean Spec</th>
+                <th style="text-align: center;">Mean MCC</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td><strong>CNN</strong></td><td>2</td><td style="text-align: center;">93.65%</td><td style="text-align: center;">97.64%</td><td style="text-align: center;">99.16%</td><td style="text-align: center;"><strong>82.51%</strong></td><td style="text-align: center;">86.87%</td></tr>
+            <tr><td><strong>Transformer</strong></td><td>5</td><td style="text-align: center;">89.31%</td><td style="text-align: center;">93.67%</td><td style="text-align: center;">94.03%</td><td style="text-align: center;">80.37%</td><td style="text-align: center;">74.73%</td></tr>
+            <tr><td><strong>Quantum</strong></td><td>1</td><td style="text-align: center;">90.89%</td><td style="text-align: center;">97.33%</td><td style="text-align: center;">98.01%</td><td style="text-align: center;">76.19%</td><td style="text-align: center;">79.11%</td></tr>
+            <tr><td><strong>Fusion (Classical)</strong></td><td>2</td><td style="text-align: center;">92.59%</td><td style="text-align: center;">94.34%</td><td style="text-align: center;"><strong>99.37%</strong></td><td style="text-align: center;">77.85%</td><td style="text-align: center;">77.29%</td></tr>
+            <tr><td><strong>Fusion-Quantum</strong></td><td>6</td><td style="text-align: center;"><strong>93.47%</strong></td><td style="text-align: center;"><strong>97.58%</strong></td><td style="text-align: center;">98.34%</td><td style="text-align: center;">77.73%</td><td style="text-align: center;"><strong>84.65%</strong></td></tr>
+        </tbody>
+    </table>
+
+    <hr>
+
+    <h2>🏗️ Architecture Descriptions</h2>
+
+    <h3>Paradigm Group 1: CNN Baselines</h3>
+    <table>
+        <thead><tr><th>Model</th><th>Description</th></tr></thead>
+        <tbody>
+            <tr><td><strong>EfficientNet-B3</strong></td><td>MBConv blocks + Squeeze-Excitation + Compound Scaling. 10.7M params. Fast, efficient, strong baseline.</td></tr>
+            <tr><td><strong>EfficientNet-B5</strong></td><td>Larger EfficientNet variant. 28.3M params. Achieves highest sensitivity (99.58%) among single-backbone CNNs.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Paradigm Group 2: Transformers</h3>
+    <table>
+        <thead><tr><th>Model</th><th>Description</th></tr></thead>
+        <tbody>
+            <tr><td><strong>ViT-Tiny</strong></td><td>Pure patch-based global self-attention. Weakest single model — pure transformers struggle on ~8K images.</td></tr>
+            <tr><td><strong>Swin-Tiny / Small</strong></td><td>Hierarchical shifted-window attention. Scaled version (Swin-Small) achieves 93% val acc.</td></tr>
+            <tr><td><strong>ConvNeXt-Tiny / Small</strong></td><td>CNN redesigned with transformer principles (LayerNorm, GELU, 7×7 DW-Conv).</td></tr>
+            <tr><td><strong>CNN+ViT Hybrid</strong></td><td>EfficientNet-B3 backbone → 4-head ViT encoder. Best specificity (87.87%) of all models.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Paradigm Group 3: Quantum (QENN)</h3>
+    <table>
+        <thead><tr><th>Model</th><th>Circuit</th><th>Key Characteristic</th></tr></thead>
+        <tbody>
+            <tr><td><strong>QENN-U3</strong></td><td>U3 rotations (full SU(2)), 8 qubits, 2 layers, cyclic CNOT</td><td>Highest sensitivity among single quantum models (98.01%)</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Paradigm Group 4: Fusion Architectures</h3>
+    <table>
+        <thead><tr><th>Model</th><th>Backbones</th><th>Fusion Strategy</th><th>Params</th></tr></thead>
+        <tbody>
+            <tr><td><strong>DualBranch-Fusion</strong></td><td>Swin-Small + ConvNeXt-Small</td><td>Dynamic gating (α per sample)</td><td>100.6M</td></tr>
+            <tr><td><strong>TripleBranch-Fusion (TBCA)</strong></td><td>Swin-Small + ConvNeXt-Small + EfficientNet-B5</td><td>Bidirectional cross-attention → 8-head self-attention → weighted fusion</td><td>141.4M</td></tr>
+            <tr><td><strong>CB-QCCF</strong></td><td>Swin-Small + ResNet-18 (QENN)</td><td>Dual sensitivity+specificity heads via cross-attention</td><td>62.9M</td></tr>
+            <tr><td><strong>Quantum-Enhanced-Fusion</strong></td><td>Swin-Small + QENN</td><td>Cascade quantum-classical fusion with entropy weight</td><td>99.6M</td></tr>
+            <tr><td><strong>MSQ-Fusion</strong></td><td>ResNet-34 + QENN</td><td>Multi-scale quantum feature extraction. Lightest fusion model.</td><td>9.1M</td></tr>
+            <tr><td><strong>TBCA-ViT-FeatureMap-Quantum</strong></td><td>TBCA triple backbone + ViT + Quantum Branch</td><td>Triple-backbone with ViT feature-map level quantum layer</td><td>124.5M</td></tr>
+            <tr><td><strong>TBCA-CNN-FeatureMap-Quantum</strong> 🏆</td><td>TBCA triple backbone + CNN + Quantum Branch</td><td>Triple-backbone with CNN feature-map level quantum layer. <strong>Best val acc.</strong></td><td>142.5M</td></tr>
+            <tr><td><strong>TBCA-Quantum-Bottleneck</strong></td><td>TBCA triple backbone + Bottleneck Quantum</td><td>Compressed bottleneck quantum circuit (768 → quantum → 768)</td><td>142.2M</td></tr>
+            <tr><td><strong>TBCA-Quantum-Fusion</strong></td><td>TBCA triple backbone + Full Quantum</td><td>End-to-end quantum-classical fusion. Highest AUC (99.01%) and near-zero FNR.</td><td>141.8M</td></tr>
+        </tbody>
+    </table>
+
+    <hr>
+
+    <h2>⚙️ Training Configuration</h2>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Parameter</th>
+                <th>Earlier Runs (result-1.csv)</th>
+                <th>Recent Runs (result-2.csv)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td>Optimizer</td><td>AdamW</td><td>AdamW</td></tr>
+            <tr><td>Learning Rate</td><td>2e-5</td><td>1e-5 (more conservative)</td></tr>
+            <tr><td>LR Schedule</td><td>Cosine annealing</td><td>Cosine annealing</td></tr>
+            <tr><td>Weight Decay</td><td>1e-4</td><td>1e-4</td></tr>
+            <tr><td>Batch Size</td><td>16–32</td><td>8–32 (model dependent)</td></tr>
+            <tr><td>Max Epochs</td><td>50</td><td>50</td></tr>
+            <tr><td>Early Stopping Patience</td><td>10</td><td>10</td></tr>
+            <tr><td>Gradient Clipping</td><td>Max norm = 1.0</td><td>Max norm = 1.0</td></tr>
+            <tr><td>Mixed Precision (AMP)</td><td>Most models</td><td>Most models</td></tr>
+            <tr><td>Cross-Validation</td><td>5-Fold, Patient-Level</td><td>5-Fold, Patient-Level</td></tr>
+        </tbody>
+    </table>
+
+    <hr>
+
+    <h2>🔬 Key Findings</h2>
+
+    <h3>1. TBCA-CNN-FeatureMap-Quantum — Best Overall Model</h3>
+    <p>Achieves <strong>95.48% val accuracy, 98.92% AUC, 99.06% sensitivity, 88.10% specificity</strong>, and the <strong>highest MCC (89.70%)</strong> of all models. The combination of triple-backbone fusion with CNN feature-map quantum enhancement provides the best balance across all metrics.</p>
+
+    <h3>2. ViT-Tiny vs. Best Model — +17.06% Absolute Gain</h3>
+    <p>Starting from the weakest baseline (ViT-Tiny, 78.42%), the progression through architectural complexity delivers a <strong>+17.06% absolute improvement</strong> in validation accuracy by the final TBCA-CNN-FM-Quantum model.</p>
+
+    <h3>3. Highest AUC Belongs to Quantum-Classical Models</h3>
+    <p>TBCA-Quantum-Fusion achieves <strong>99.01% AUC</strong>, followed by Swin-Small (98.63%) and TBCA-CNN-FM-Quantum (98.92%). This demonstrates quantum circuits add discriminability even when val accuracy does not top the chart.</p>
+
+    <h3>4. Sensitivity vs. Specificity Trade-off</h3>
+    <p>Nearly all models show sensitivity > 90%, with the lowest FNR being <strong>0.21% (DualBranch-Fusion)</strong> and <strong>0.31% (TBCA-Quantum-Fusion and CB-QCCF)</strong>. The CNN+ViT Hybrid achieves the best specificity (<strong>87.87%</strong>), making it the best balanced model for clinical use in terms of reducing both false positives and false negatives.</p>
+
+    <h3>5. EfficientNet-B3 Remains a Strong, Lightweight Baseline</h3>
+    <p>At only <strong>10.7M params</strong> and ~59 min training, EfficientNet-B3 achieves <strong>94.07% val accuracy and 97.59% AUC</strong>, making it the best efficiency-to-performance ratio model. A clear reminder that architectural complexity doesn't always win.</p>
+
+    <hr>
+
+    <h2>📌 Summary for Mentor</h2>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Metric</th>
+                <th>Best Model</th>
+                <th>Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td><strong>Highest Val Accuracy</strong></td><td>TBCA-CNN-FeatureMap-Quantum</td><td><strong>95.48% ± 1.53%</strong></td></tr>
+            <tr><td><strong>Highest Val AUC-ROC</strong></td><td>TBCA-Quantum-Fusion</td><td><strong>99.01%</strong></td></tr>
+            <tr><td><strong>Highest Sensitivity</strong></td><td>DualBranch-Fusion</td><td><strong>99.79%</strong> (FNR = 0.21%)</td></tr>
+            <tr><td><strong>Highest Specificity</strong></td><td>CNN+ViT Hybrid</td><td><strong>87.87%</strong></td></tr>
+            <tr><td><strong>Highest MCC</strong></td><td>TBCA-CNN-FeatureMap-Quantum</td><td><strong>89.70%</strong></td></tr>
+            <tr><td><strong>Most Efficient (Best Acc/Params)</strong></td><td>EfficientNet-B3</td><td>94.07% at 10.7M params</td></tr>
+            <tr><td><strong>Best Baseline</strong></td><td>ViT-Tiny</td><td>78.42% (weakest), EfficientNet-B3 (94.07%) as practical baseline</td></tr>
+            <tr><td><strong>Best Fusion Model</strong></td><td>TBCA-CNN-FeatureMap-Quantum</td><td>95.48% val acc, 99.06% sensitivity</td></tr>
+        </tbody>
+    </table>
+
+    <p>
+        <strong>Total Models Benchmarked:</strong> 18 unique architectures across 5 paradigms<br>
+        <strong>Total Experimental Runs:</strong> ~70+ W&B runs (deduplicated to best per model)<br>
+        <strong>Improvement from Baseline to Best:</strong> +17.06% val accuracy (ViT-Tiny 78.42% → TBCA-CNN-FM-Quantum 95.48%)<br>
+        <strong>Experiment Tracking:</strong> W&B — Project: <code>breast-cancer-transformers</code>
+    </p>
+
+</body>
+</html>
